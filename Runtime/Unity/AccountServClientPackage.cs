@@ -175,7 +175,7 @@ namespace BasisAccountServ
                 }
 
                 if (string.IsNullOrEmpty(password) ||
-                    !string.Equals(accountName, expectedAccount, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(accountName.Trim(), (expectedAccount ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
                 {
                     ClearPendingIdentify();
                     ResponseReceived?.Invoke("Identify challenge did not match the pending request.");
@@ -203,12 +203,14 @@ namespace BasisAccountServ
                 Array.Clear(clientKey, 0, clientKey.Length);
 
                 ClearPendingIdentify();
-                Send(AccountServClientProtocol.RequestCompleteIdentify, writer =>
+                bool sent = Send(AccountServClientProtocol.RequestCompleteIdentify, writer =>
                 {
                     writer.Put(accountName);
                     writer.Put(nonceBase64);
                     writer.Put(Convert.ToBase64String(proof));
                 });
+                if (!sent)
+                    ResponseReceived?.Invoke("Identify proof could not be sent. Reconnect and try again.");
             }
             catch
             {
