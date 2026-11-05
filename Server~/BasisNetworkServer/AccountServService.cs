@@ -96,13 +96,13 @@ namespace BasisAccountServ
                 byte[] salt = new byte[SaltSize];
                 using (RandomNumberGenerator random = RandomNumberGenerator.Create())
                     random.GetBytes(salt);
-                byte[] hash = DeriveHash(password, salt);
+                DeriveCredentialKeys(password, salt, out byte[] storedKey, out _);
                 Accounts.Add(key, new AccountRecord
                 {
                     Name = accountName.Trim(),
                     OwnerUuid = authenticatedUuid.Trim(),
                     Salt = Convert.ToBase64String(salt),
-                    PasswordHash = Convert.ToBase64String(hash),
+                    PasswordHash = Convert.ToBase64String(storedKey),
                     CreatedUtc = DateTime.UtcNow
                 });
                 Save_NoLock();
@@ -272,12 +272,12 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                byte[] verifier;
+                byte[] storedKey;
                 byte[] suppliedProof;
                 byte[] nonce;
                 try
                 {
-                    verifier = Convert.FromBase64String(account.PasswordHash);
+                    storedKey = Convert.FromBase64String(account.PasswordHash);
                     suppliedProof = Convert.FromBase64String(proofBase64 ?? string.Empty);
                     nonce = Convert.FromBase64String(nonceBase64 ?? string.Empty);
                 }
@@ -288,7 +288,7 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                if (verifier.Length != HashSize || suppliedProof.Length != HashSize || nonce.Length != 32)
+                if (storedKey.Length != HashSize || suppliedProof.Length != HashSize || nonce.Length != 32)
                 {
                     RecordFailure_NoLock(uuid);
                     error = "Invalid account or password.";
@@ -296,11 +296,19 @@ namespace BasisAccountServ
                 }
 
                 byte[] proofInput = Encoding.UTF8.GetBytes(challenge.AccountName + "\\n" + challenge.Nonce);
-                byte[] expectedProof;
-                using (var hmac = new HMACSHA256(verifier))
-                    expectedProof = hmac.ComputeHash(proofInput);
+                byte[] signature;
+                using (var hmac = new HMACSHA256(storedKey))
+                    signature = hmac.ComputeHash(proofInput);
 
-                if (!CryptographicOperations.FixedTimeEquals(expectedProof, suppliedProof))
+                byte[] clientKey = new byte[HashSize];
+                for (int i = 0; i < HashSize; i++)
+                    clientKey[i] = (byte)(suppliedProof[i] ^ signature[i]);
+
+                byte[] computedStoredKey;
+                using (SHA256 sha = SHA256.Create())
+                    computedStoredKey = sha.ComputeHash(clientKey);
+
+                if (!CryptographicOperations.FixedTimeEquals(computedStoredKey, storedKey))
                 {
                     RecordFailure_NoLock(uuid);
                     error = "Invalid account or password.";
@@ -345,7 +353,7 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                byte[] actual = DeriveHash(password, salt);
+                DeriveCredentialKeys(password, salt, out byte[] actual, out _);
                 if (!CryptographicOperations.FixedTimeEquals(actual, expected))
                 {
                     RecordFailure_NoLock(authenticatedUuid);
@@ -461,6 +469,16 @@ namespace BasisAccountServ
         {
             using (var derive = new Rfc2898DeriveBytes(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
                 return derive.GetBytes(HashSize);
+        }
+
+        private static void DeriveCredentialKeys(string password, byte[] salt, out byte[] storedKey, out byte[] clientKey)
+        {
+            byte[] saltedPassword = DeriveHash(password, salt);
+            using (var hmac = new HMACSHA256(saltedPassword))
+                clientKey = hmac.ComputeHash(Encoding.UTF8.GetBytes("Client Key"));
+            using (SHA256 sha = SHA256.Create())
+                storedKey = sha.ComputeHash(clientKey);
+            Array.Clear(saltedPassword, 0, saltedPassword.Length);
         }
 
         private static bool IsLocked_NoLock(string uuid)
