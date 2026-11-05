@@ -66,6 +66,7 @@ The Operator page is accepted only when the requesting UUID is already in Basis'
 - Registration sends the salt and a SCRAM-style stored key, not the password.
 - Identification uses a random 32-byte, one-use challenge that expires after one minute. The client sends a proof derived from the password; the server verifies it against the stored key.
 - Failed identify attempts are counted per authenticated Basis UUID and trigger the configured temporary lockout.
+- Accounts created by the earlier PBKDF2-only package version are upgraded to the stored-key format on their first challenge-based identify attempt.
 - The private plugin channel is a routing boundary, not a claim that every Basis transport encrypts all packets. Use a trusted network/secure transport when confidentiality of all traffic is required.
 
 The client currently enforces a 12-character minimum locally. The server also checks the configured minimum against the reported password length; because the password is intentionally never transmitted, a modified client can bypass this client-side length policy. AccountServ must never treat password length as an authorization boundary.
