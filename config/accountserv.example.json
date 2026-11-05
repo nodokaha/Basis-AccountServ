@@ -1,0 +1,20 @@
+{
+  "enabled": false,
+  "database": "config/accountserv.db",
+  "registration": {
+    "enabled": true,
+    "requireBasisIdentity": true
+  },
+  "security": {
+    "minimumPasswordLength": 12,
+    "maximumFailedLogins": 5,
+    "lockoutSeconds": 300,
+    "sessionLifetimeMinutes": 1440
+  },
+  "commands": {
+    "prefix": "!account"
+  },
+  "bootstrap": {
+    "operatorUuids": []
+  }
+}
