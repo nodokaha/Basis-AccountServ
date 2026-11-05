@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-validation:
+    name: Package metadata and configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package metadata and sample config
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = json.loads(Path("package.json").read_text(encoding="utf-8"))
+          config = json.loads(Path("config/accountserv.example.json").read_text(encoding="utf-8"))
+
+          assert package["name"] == "com.nodokaha.accountserv"
+          assert package["basisServer"]["modules"] == [{
+              "path": "Server~/BasisNetworkServer",
+              "assembly": "BasisNetworkServer",
+          }]
+          assert config["enabled"] is False
+          assert config["security"]["minimumPasswordLength"] >= 12
+          assert config["security"]["maximumFailedLogins"] > 0
+          assert config["security"]["lockoutSeconds"] > 0
+          assert isinstance(config["bootstrap"]["operatorUuids"], list)
+
+          source = Path("Server~/BasisNetworkServer/AccountServPackage.cs")
+          assert source.is_file(), f"Missing package entry point: {source}"
+          print("Package metadata, sample config, and entry point are valid.")
+          PY
+
+  basis-build:
+    name: Compile package against Basis Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AccountServ
+        uses: actions/checkout@v4
+        with:
+          path: AccountServ
+
+      - name: Checkout Basis Server
+        uses: actions/checkout@v4
+        with:
+          repository: BasisVR/Basis
+          ref: developer
+          path: Basis
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Inject package source into BasisNetworkServer project
+        working-directory: Basis
+        run: |
+          cp ../AccountServ/Server~/BasisNetworkServer/AccountServPackage.cs \
+            "Basis Server/BasisNetworkServer/AccountServPackage.cs"
+
+      - name: Build BasisNetworkServer with AccountServ
+        working-directory: Basis
+        run: |
+          dotnet build "Basis Server/BasisNetworkServer/BasisNetworkServer.csproj" \
+            --configuration Release
