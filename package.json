@@ -6,10 +6,6 @@
   "basisServer": {
     "modules": [
       {
-        "path": "Runtime",
-        "assembly": "BasisNetworkClient"
-      },
-      {
         "path": "Server~/BasisNetworkServer",
         "assembly": "BasisNetworkServer"
       }
