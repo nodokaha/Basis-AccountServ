@@ -1,0 +1,14 @@
+{
+  "name": "com.nodokaha.accountserv",
+  "version": "0.1.0",
+  "displayName": "Basis AccountServ",
+  "description": "Anope-inspired account and operator services for Basis Server.",
+  "basisServer": {
+    "modules": [
+      {
+        "path": "Server~/BasisNetworkServer",
+        "assembly": "BasisNetworkServer"
+      }
+    ]
+  }
+}
