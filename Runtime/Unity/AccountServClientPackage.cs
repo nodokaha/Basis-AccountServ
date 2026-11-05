@@ -2,8 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using Basis.Network.Core;
-
-[assembly: BasisNetworkPackage(typeof(BasisAccountServ.AccountServClientPackage))]
+using UnityEngine;
 
 namespace BasisAccountServ
 {
@@ -30,18 +29,16 @@ namespace BasisAccountServ
     /// Passwords are processed locally; only a salted verifier or a one-time HMAC proof
     /// is sent to the server. This never hooks or modifies ordinary Basis chat.
     /// </summary>
-    public sealed class AccountServClientPackage : IBasisNetworkPackage
+    public static class AccountServClient
     {
-        public void Initialize()
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Initialize()
         {
             BasisClientMessageRegistry.RegisterClientPlugin(
                 AccountServClientProtocol.MessageName,
-                AccountServClient.HandleServerMessage);
+                HandleServerMessage);
         }
-    }
 
-    public static class AccountServClient
-    {
         private static readonly object PendingIdentifyLock = new object();
         private static string pendingAccountName;
         private static string pendingPassword;
