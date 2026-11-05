@@ -1,0 +1,9 @@
+{
+  "name": "BasisAccountServ.Unity",
+  "rootNamespace": "BasisAccountServ",
+  "references": [
+    "Basis Framework",
+    "BasisNetworkCore"
+  ],
+  "autoReferenced": true
+}

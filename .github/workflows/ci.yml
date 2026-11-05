@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate package metadata and sample config
+      - name: Validate package metadata, client assembly, and sample config
         run: |
           python3 - <<'PY'
           import json
@@ -35,13 +35,25 @@ jobs:
           assert config["security"]["maximumFailedLogins"] > 0
           assert config["security"]["lockoutSeconds"] > 0
 
-          source = Path("Server~/BasisNetworkServer/AccountServPackage.cs")
-          assert source.is_file(), f"Missing package entry point: {source}"
-          print("Package metadata, sample config, and entry point are valid.")
+          required = [
+              "Runtime/Unity/AccountServClientPackage.cs",
+              "Runtime/Unity/BasisAccountServ.Unity.asmdef",
+              "Runtime/Unity/BasisAccountServWindow.cs",
+              "Server~/BasisNetworkServer/AccountServPackage.cs",
+              "Server~/BasisNetworkServer/AccountServMessageHandler.cs",
+              "Server~/BasisNetworkServer/AccountServService.cs",
+          ]
+          for name in required:
+              assert Path(name).is_file(), f"Missing package source: {name}"
+
+          asmdef = json.loads(Path("Runtime/Unity/BasisAccountServ.Unity.asmdef").read_text())
+          assert "Basis Framework" in asmdef["references"]
+          assert "BasisNetworkCore" in asmdef["references"]
+          print("Package metadata, Unity client sources, and sample config are valid.")
           PY
 
   basis-build:
-    name: Compile package against Basis Server
+    name: Compile AccountServ server module
     runs-on: ubuntu-latest
     steps:
       - name: Checkout AccountServ
@@ -61,7 +73,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Inject package source into BasisNetworkServer project
+      - name: Inject AccountServ source into BasisNetworkServer
         working-directory: Basis
         run: |
           cp ../AccountServ/Server~/BasisNetworkServer/*.cs \

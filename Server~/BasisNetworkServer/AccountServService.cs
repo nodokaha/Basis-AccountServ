@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text;
 using BasisPermissions;
 
 namespace BasisAccountServ
@@ -24,6 +25,8 @@ namespace BasisAccountServ
             new Dictionary<string, SessionRecord>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, FailureRecord> Failures =
             new Dictionary<string, FailureRecord>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, ChallengeRecord> Challenges =
+            new Dictionary<string, ChallengeRecord>(StringComparer.OrdinalIgnoreCase);
 
         private static string _databasePath = "config/accountserv.db";
         private static int _minimumPasswordLength = 12;
@@ -53,6 +56,7 @@ namespace BasisAccountServ
                 Accounts.Clear();
                 Sessions.Clear();
                 Failures.Clear();
+                Challenges.Clear();
 
                 string directory = Path.GetDirectoryName(_databasePath);
                 if (!string.IsNullOrEmpty(directory))
@@ -92,17 +96,235 @@ namespace BasisAccountServ
                 byte[] salt = new byte[SaltSize];
                 using (RandomNumberGenerator random = RandomNumberGenerator.Create())
                     random.GetBytes(salt);
-                byte[] hash = DeriveHash(password, salt);
+                DeriveCredentialKeys(password, salt, out byte[] storedKey, out _);
                 Accounts.Add(key, new AccountRecord
                 {
                     Name = accountName.Trim(),
                     OwnerUuid = authenticatedUuid.Trim(),
                     Salt = Convert.ToBase64String(salt),
-                    PasswordHash = Convert.ToBase64String(hash),
+                    PasswordHash = Convert.ToBase64String(storedKey),
+                    CredentialVersion = 2,
                     CreatedUtc = DateTime.UtcNow
                 });
                 Save_NoLock();
                 Sessions[authenticatedUuid.Trim()] = NewSession(accountName);
+                return true;
+            }
+        }
+
+
+        /// <summary>
+        /// Registers a client-generated SCRAM-style stored key. The password itself never crosses
+        /// the network; the client derives the stored key from its password and random salt.
+        /// </summary>
+        public static bool RegisterVerifier(
+            string authenticatedUuid,
+            string accountName,
+            string saltBase64,
+            string storedKeyBase64,
+            int claimedPasswordLength,
+            out string error)
+        {
+            error = null;
+            if (!IsValidIdentity(authenticatedUuid)) { error = "A verified Basis identity is required."; return false; }
+            if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 characters (letters, digits, underscore, or hyphen)."; return false; }
+            if (claimedPasswordLength < _minimumPasswordLength || claimedPasswordLength > 256)
+            {
+                error = "Password length must be within the configured minimum and 256 characters.";
+                return false;
+            }
+
+            byte[] salt;
+            byte[] verifier;
+            try
+            {
+                salt = Convert.FromBase64String(saltBase64 ?? string.Empty);
+                verifier = Convert.FromBase64String(storedKeyBase64 ?? string.Empty);
+            }
+            catch
+            {
+                error = "Invalid registration verifier.";
+                return false;
+            }
+            if (salt.Length != SaltSize || verifier.Length != HashSize)
+            {
+                error = "Invalid registration verifier.";
+                return false;
+            }
+
+            lock (Gate)
+            {
+                EnsureInitialized();
+                string key = NormalizeName(accountName);
+                if (Accounts.ContainsKey(key)) { error = "Account name is already registered."; return false; }
+
+                Accounts.Add(key, new AccountRecord
+                {
+                    Name = accountName.Trim(),
+                    OwnerUuid = authenticatedUuid.Trim(),
+                    Salt = Convert.ToBase64String(salt),
+                    PasswordHash = Convert.ToBase64String(verifier),
+                    CredentialVersion = 2,
+                    CreatedUtc = DateTime.UtcNow
+                });
+                Save_NoLock();
+                Sessions[authenticatedUuid.Trim()] = NewSession(accountName);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Starts a one-time challenge for password identification. The server returns only
+        /// the stored salt and a random nonce; it never asks the client to transmit its password.
+        /// </summary>
+        public static bool BeginIdentifyChallenge(
+            string authenticatedUuid,
+            string accountName,
+            out string saltBase64,
+            out string nonceBase64,
+            out string error)
+        {
+            saltBase64 = null;
+            nonceBase64 = null;
+            error = null;
+            if (!IsValidIdentity(authenticatedUuid) || string.IsNullOrWhiteSpace(accountName))
+            {
+                error = "Invalid account or password.";
+                return false;
+            }
+
+            lock (Gate)
+            {
+                EnsureInitialized();
+                string uuid = authenticatedUuid.Trim();
+                if (IsLocked_NoLock(uuid))
+                {
+                    error = "Login temporarily locked. Try again later.";
+                    return false;
+                }
+
+                if (!Accounts.TryGetValue(NormalizeName(accountName), out AccountRecord account) ||
+                    !string.Equals(account.OwnerUuid, uuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    RecordFailure_NoLock(uuid);
+                    error = "Invalid account or password.";
+                    return false;
+                }
+
+                if (!UpgradeLegacyCredential_NoLock(account))
+                {
+                    error = "Stored account credentials are invalid. Contact the server administrator.";
+                    return false;
+                }
+
+                byte[] nonce = new byte[32];
+                using (RandomNumberGenerator random = RandomNumberGenerator.Create())
+                    random.GetBytes(nonce);
+
+                nonceBase64 = Convert.ToBase64String(nonce);
+                saltBase64 = account.Salt;
+                Challenges[uuid] = new ChallengeRecord
+                {
+                    AccountName = NormalizeName(accountName),
+                    Nonce = nonceBase64,
+                    ExpiresUtc = DateTime.UtcNow.AddMinutes(1)
+                };
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Verifies a SCRAM-style client proof derived from the client's PBKDF2 credential. Each challenge is
+        /// single-use and expires after one minute.
+        /// </summary>
+        public static bool CompleteIdentifyChallenge(
+            string authenticatedUuid,
+            string accountName,
+            string nonceBase64,
+            string proofBase64,
+            out string error)
+        {
+            error = null;
+            if (!IsValidIdentity(authenticatedUuid) || string.IsNullOrWhiteSpace(accountName))
+            {
+                error = "Invalid account or password.";
+                return false;
+            }
+
+            lock (Gate)
+            {
+                EnsureInitialized();
+                string uuid = authenticatedUuid.Trim();
+                if (IsLocked_NoLock(uuid))
+                {
+                    Challenges.Remove(uuid);
+                    error = "Login temporarily locked. Try again later.";
+                    return false;
+                }
+
+                if (!Challenges.TryGetValue(uuid, out ChallengeRecord challenge))
+                {
+                    error = "Login challenge expired. Please try again.";
+                    return false;
+                }
+                Challenges.Remove(uuid);
+
+                if (challenge.ExpiresUtc <= DateTime.UtcNow ||
+                    !string.Equals(challenge.AccountName, NormalizeName(accountName), StringComparison.Ordinal) ||
+                    !string.Equals(challenge.Nonce, nonceBase64, StringComparison.Ordinal) ||
+                    !Accounts.TryGetValue(challenge.AccountName, out AccountRecord account) ||
+                    !string.Equals(account.OwnerUuid, uuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    RecordFailure_NoLock(uuid);
+                    error = "Invalid account or password.";
+                    return false;
+                }
+
+                byte[] storedKey;
+                byte[] suppliedProof;
+                byte[] nonce;
+                try
+                {
+                    storedKey = Convert.FromBase64String(account.PasswordHash);
+                    suppliedProof = Convert.FromBase64String(proofBase64 ?? string.Empty);
+                    nonce = Convert.FromBase64String(nonceBase64 ?? string.Empty);
+                }
+                catch
+                {
+                    RecordFailure_NoLock(uuid);
+                    error = "Invalid account or password.";
+                    return false;
+                }
+
+                if (storedKey.Length != HashSize || suppliedProof.Length != HashSize || nonce.Length != 32)
+                {
+                    RecordFailure_NoLock(uuid);
+                    error = "Invalid account or password.";
+                    return false;
+                }
+
+                byte[] proofInput = Encoding.UTF8.GetBytes(challenge.AccountName + "\\n" + challenge.Nonce);
+                byte[] signature;
+                using (var hmac = new HMACSHA256(storedKey))
+                    signature = hmac.ComputeHash(proofInput);
+
+                byte[] clientKey = new byte[HashSize];
+                for (int i = 0; i < HashSize; i++)
+                    clientKey[i] = (byte)(suppliedProof[i] ^ signature[i]);
+
+                byte[] computedStoredKey;
+                using (SHA256 sha = SHA256.Create())
+                    computedStoredKey = sha.ComputeHash(clientKey);
+
+                if (!CryptographicOperations.FixedTimeEquals(computedStoredKey, storedKey))
+                {
+                    RecordFailure_NoLock(uuid);
+                    error = "Invalid account or password.";
+                    return false;
+                }
+
+                Failures.Remove(uuid);
+                Sessions[uuid] = NewSession(account.Name);
                 return true;
             }
         }
@@ -139,12 +361,25 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                byte[] actual = DeriveHash(password, salt);
+                byte[] actual;
+                if (account.CredentialVersion < 2)
+                    actual = DeriveHash(password, salt);
+                else
+                    DeriveCredentialKeys(password, salt, out actual, out _);
+
                 if (!CryptographicOperations.FixedTimeEquals(actual, expected))
                 {
                     RecordFailure_NoLock(authenticatedUuid);
                     error = "Invalid account name or password.";
                     return false;
+                }
+
+                if (account.CredentialVersion < 2)
+                {
+                    DeriveCredentialKeys(password, salt, out byte[] upgradedStoredKey, out _);
+                    account.PasswordHash = Convert.ToBase64String(upgradedStoredKey);
+                    account.CredentialVersion = 2;
+                    Save_NoLock();
                 }
 
                 Failures.Remove(authenticatedUuid);
@@ -208,7 +443,7 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (!PermissionIntegration.Manager.IsInGroup(actorUuid, "admin"))
+                if (!PermissionManager.PermissionIntegration.Manager.IsInGroup(actorUuid, "admin"))
                 {
                     error = "Only existing Basis administrators can manage AccountServ roles.";
                     return false;
@@ -216,16 +451,16 @@ namespace BasisAccountServ
 
                 string normalizedRole = (role ?? "").Trim().ToLowerInvariant();
                 if (normalizedRole == "admin")
-                    PermissionIntegration.Manager.AddUserToGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.AddUserToGroup(targetUuid, "admin");
                 else if (normalizedRole == "moderator")
                 {
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
-                    PermissionIntegration.Manager.AddUserToGroup(targetUuid, "moderator");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.AddUserToGroup(targetUuid, "moderator");
                 }
                 else if (normalizedRole == "none")
                 {
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "moderator");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "moderator");
                 }
                 else
                 {
@@ -251,10 +486,45 @@ namespace BasisAccountServ
             ExpiresUtc = DateTime.UtcNow.AddMinutes(_sessionLifetimeMinutes)
         };
 
+        private static bool UpgradeLegacyCredential_NoLock(AccountRecord account)
+        {
+            if (account.CredentialVersion >= 2) return true;
+            try
+            {
+                byte[] legacyPbkdf2 = Convert.FromBase64String(account.PasswordHash ?? string.Empty);
+                if (legacyPbkdf2.Length != HashSize) return false;
+                byte[] clientKey;
+                using (var hmac = new HMACSHA256(legacyPbkdf2))
+                    clientKey = hmac.ComputeHash(Encoding.UTF8.GetBytes("Client Key"));
+                byte[] storedKey;
+                using (SHA256 sha = SHA256.Create())
+                    storedKey = sha.ComputeHash(clientKey);
+                account.PasswordHash = Convert.ToBase64String(storedKey);
+                account.CredentialVersion = 2;
+                Save_NoLock();
+                Array.Clear(clientKey, 0, clientKey.Length);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static byte[] DeriveHash(string password, byte[] salt)
         {
             using (var derive = new Rfc2898DeriveBytes(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
                 return derive.GetBytes(HashSize);
+        }
+
+        private static void DeriveCredentialKeys(string password, byte[] salt, out byte[] storedKey, out byte[] clientKey)
+        {
+            byte[] saltedPassword = DeriveHash(password, salt);
+            using (var hmac = new HMACSHA256(saltedPassword))
+                clientKey = hmac.ComputeHash(Encoding.UTF8.GetBytes("Client Key"));
+            using (SHA256 sha = SHA256.Create())
+                storedKey = sha.ComputeHash(clientKey);
+            Array.Clear(saltedPassword, 0, saltedPassword.Length);
         }
 
         private static bool IsLocked_NoLock(string uuid)
@@ -322,6 +592,7 @@ namespace BasisAccountServ
             public string OwnerUuid { get; set; }
             public string Salt { get; set; }
             public string PasswordHash { get; set; }
+            public int CredentialVersion { get; set; }
             public DateTime CreatedUtc { get; set; }
         }
 
@@ -335,6 +606,13 @@ namespace BasisAccountServ
         {
             public int Count { get; set; }
             public DateTime LockedUntilUtc { get; set; }
+        }
+
+        private sealed class ChallengeRecord
+        {
+            public string AccountName { get; set; }
+            public string Nonce { get; set; }
+            public DateTime ExpiresUtc { get; set; }
         }
     }
 }

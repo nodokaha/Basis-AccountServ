@@ -1,8 +1,8 @@
 {
   "name": "com.nodokaha.accountserv",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Basis AccountServ",
-  "description": "Anope-inspired account and operator services for Basis Server.",
+  "description": "Anope-inspired account, operator, and private server messaging services for Basis.",
   "basisServer": {
     "modules": [
       {

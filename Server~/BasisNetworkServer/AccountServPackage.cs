@@ -9,8 +9,8 @@ using BasisNetworkServer;
 namespace BasisAccountServ
 {
     /// <summary>
-    /// Basis Server package entry point. Chat command handling is intentionally not
-    /// installed: this package currently exposes an account service API to server modules.
+    /// Basis Server package entry point. Registers the AccountServ backend and its
+    /// private plugin-message endpoint without touching the ordinary chat channel.
     /// </summary>
     public sealed class AccountServPackage : IBasisNetworkPackage
     {
@@ -22,7 +22,7 @@ namespace BasisAccountServ
             _initialized = true;
             NetworkServer.ServerStarted += OnServerStarted;
             NetworkServer.ServerStopping += OnServerStopping;
-            BNL.Log("[AccountServ] Package initialized. Chat commands are not enabled; account API awaits trusted server-side callers.");
+            BNL.Log("[AccountServ] Package initialized.");
         }
 
         private static void OnServerStarted(Configuration configuration)
@@ -65,7 +65,8 @@ namespace BasisAccountServ
 
                     AccountServService.Initialize(database, minimumPasswordLength,
                         maximumFailedLogins, lockoutSeconds, sessionLifetimeMinutes);
-                    BNL.Log("[AccountServ] Account service initialized. Chat command adapter is not installed.");
+                    AccountServMessageHandler.Register();
+                    BNL.Log("[AccountServ] Account service and private DM endpoint initialized.");
                 }
             }
             catch (Exception exception)
