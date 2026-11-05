@@ -4,6 +4,16 @@ Anope-inspired account and operator services for [Basis Server](https://github.c
 
 > **Development status: bootstrap scaffold.** The package entry point and package metadata are in place. NickServ/OperServ command handling, persistent account storage, password verification and permission synchronization are not yet enabled. They depend on the server-side chat interception API described below.
 
+## CI validation
+
+GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch.
+
+- Validates `package.json`, the example configuration, and the package entry point.
+- Checks out the `developer` branch of the official `BasisVR/Basis` repository.
+- Temporarily copies the package entry point into `BasisNetworkServer` and builds that project with .NET 10.
+
+This verifies that the current package entry point compiles against the upstream server API. It does **not** yet test chat command handling, account persistence, or authentication behavior; those features are not implemented until the required upstream chat hook is available.
+
 ## Installation
 
 From a Basis Server checkout:
