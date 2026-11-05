@@ -63,13 +63,13 @@ namespace BasisAccountServ
             byte[] salt = new byte[AccountServClientProtocol.SaltSize];
             using (RandomNumberGenerator random = RandomNumberGenerator.Create())
                 random.GetBytes(salt);
-            byte[] verifier = DeriveVerifier(password, salt);
+            DeriveCredentialKeys(password, salt, out byte[] storedKey, out _);
 
             return Send(AccountServClientProtocol.RequestRegister, writer =>
             {
                 writer.Put(accountName ?? string.Empty);
                 writer.Put(Convert.ToBase64String(salt));
-                writer.Put(Convert.ToBase64String(verifier));
+                writer.Put(Convert.ToBase64String(storedKey));
                 writer.Put(password.Length);
             });
         }
@@ -192,12 +192,16 @@ namespace BasisAccountServ
                     return;
                 }
 
-                byte[] verifier = DeriveVerifier(password, salt);
+                DeriveCredentialKeys(password, salt, out byte[] storedKey, out byte[] clientKey);
                 string normalizedAccount = accountName.Trim().ToLowerInvariant();
                 byte[] proofInput = Encoding.UTF8.GetBytes(normalizedAccount + "\\n" + nonceBase64);
-                byte[] proof;
-                using (var hmac = new HMACSHA256(verifier))
-                    proof = hmac.ComputeHash(proofInput);
+                byte[] signature;
+                using (var hmac = new HMACSHA256(storedKey))
+                    signature = hmac.ComputeHash(proofInput);
+                byte[] proof = new byte[AccountServClientProtocol.VerifierSize];
+                for (int i = 0; i < proof.Length; i++)
+                    proof[i] = (byte)(clientKey[i] ^ signature[i]);
+                Array.Clear(clientKey, 0, clientKey.Length);
 
                 ClearPendingIdentify();
                 Send(AccountServClientProtocol.RequestCompleteIdentify, writer =>
@@ -214,16 +218,24 @@ namespace BasisAccountServ
             }
         }
 
-        private static byte[] DeriveVerifier(string password, byte[] salt)
+        private static void DeriveCredentialKeys(string password, byte[] salt, out byte[] storedKey, out byte[] clientKey)
         {
+            byte[] saltedPassword;
             using (var derive = new Rfc2898DeriveBytes(
                 password,
                 salt,
                 AccountServClientProtocol.Pbkdf2Iterations,
                 HashAlgorithmName.SHA256))
             {
-                return derive.GetBytes(AccountServClientProtocol.VerifierSize);
+                saltedPassword = derive.GetBytes(AccountServClientProtocol.VerifierSize);
             }
+
+            using (var hmac = new HMACSHA256(saltedPassword))
+                clientKey = hmac.ComputeHash(Encoding.UTF8.GetBytes("Client Key"));
+            using (SHA256 sha = SHA256.Create())
+                storedKey = sha.ComputeHash(clientKey);
+
+            Array.Clear(saltedPassword, 0, saltedPassword.Length);
         }
 
         private static void ClearPendingIdentify()
