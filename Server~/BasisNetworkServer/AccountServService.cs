@@ -443,7 +443,7 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (!PermissionIntegration.Manager.IsInGroup(actorUuid, "admin"))
+                if (!PermissionManager.PermissionIntegration.Manager.IsInGroup(actorUuid, "admin"))
                 {
                     error = "Only existing Basis administrators can manage AccountServ roles.";
                     return false;
@@ -451,16 +451,16 @@ namespace BasisAccountServ
 
                 string normalizedRole = (role ?? "").Trim().ToLowerInvariant();
                 if (normalizedRole == "admin")
-                    PermissionIntegration.Manager.AddUserToGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.AddUserToGroup(targetUuid, "admin");
                 else if (normalizedRole == "moderator")
                 {
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
-                    PermissionIntegration.Manager.AddUserToGroup(targetUuid, "moderator");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.AddUserToGroup(targetUuid, "moderator");
                 }
                 else if (normalizedRole == "none")
                 {
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
-                    PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "moderator");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "admin");
+                    PermissionManager.PermissionIntegration.Manager.RemoveUserFromGroup(targetUuid, "moderator");
                 }
                 else
                 {
