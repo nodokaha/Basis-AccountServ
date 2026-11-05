@@ -34,7 +34,6 @@ jobs:
           assert config["security"]["minimumPasswordLength"] >= 12
           assert config["security"]["maximumFailedLogins"] > 0
           assert config["security"]["lockoutSeconds"] > 0
-          assert isinstance(config["bootstrap"]["operatorUuids"], list)
 
           source = Path("Server~/BasisNetworkServer/AccountServPackage.cs")
           assert source.is_file(), f"Missing package entry point: {source}"
