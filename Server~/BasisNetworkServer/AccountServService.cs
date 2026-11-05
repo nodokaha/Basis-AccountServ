@@ -311,11 +311,13 @@ namespace BasisAccountServ
 
         private sealed class AccountDatabase
         {
+            public AccountDatabase() { }
             public List<AccountRecord> Accounts { get; set; } = new List<AccountRecord>();
         }
 
         private sealed class AccountRecord
         {
+            public AccountRecord() { }
             public string Name { get; set; }
             public string OwnerUuid { get; set; }
             public string Salt { get; set; }
