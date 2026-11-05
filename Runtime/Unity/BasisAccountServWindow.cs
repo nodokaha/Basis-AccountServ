@@ -102,7 +102,7 @@ namespace BasisAccountServ
             {
                 GUILayout.Label("Account name");
                 accountName = GUILayout.TextField(accountName, 24);
-                GUILayout.Label("Password (sent only to this server over the private plugin channel)");
+                GUILayout.Label("Password (processed locally; password itself is never sent)");
                 password = GUILayout.PasswordField(password, '*', 256);
                 if (GUILayout.Button(page == Page.Register ? "Register account" : "Identify"))
                 {
