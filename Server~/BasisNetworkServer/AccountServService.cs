@@ -81,7 +81,7 @@ namespace BasisAccountServ
             error = null;
             if (!IsValidIdentity(authenticatedUuid)) { error = "A verified Basis identity is required."; return false; }
             if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 characters (letters, digits, underscore, or hyphen)."; return false; }
-            if (password == null || password.Length < _minimumPasswordLength) { error = "Password is too short."; return false; }
+            if (password == null || password.Length < _minimumPasswordLength || password.Length > 256) { error = "Password length must be within the configured minimum and 256 characters."; return false; }
 
             lock (Gate)
             {
@@ -89,7 +89,9 @@ namespace BasisAccountServ
                 string key = NormalizeName(accountName);
                 if (Accounts.ContainsKey(key)) { error = "Account name is already registered."; return false; }
 
-                byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
+                byte[] salt = new byte[SaltSize];
+                using (RandomNumberGenerator random = RandomNumberGenerator.Create())
+                    random.GetBytes(salt);
                 byte[] hash = DeriveHash(password, salt);
                 Accounts.Add(key, new AccountRecord
                 {
