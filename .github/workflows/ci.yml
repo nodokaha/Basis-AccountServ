@@ -65,8 +65,8 @@ jobs:
       - name: Inject package source into BasisNetworkServer project
         working-directory: Basis
         run: |
-          cp ../AccountServ/Server~/BasisNetworkServer/AccountServPackage.cs \
-            "Basis Server/BasisNetworkServer/AccountServPackage.cs"
+          cp ../AccountServ/Server~/BasisNetworkServer/*.cs \
+            "Basis Server/BasisNetworkServer/"
 
       - name: Build BasisNetworkServer with AccountServ
         working-directory: Basis
