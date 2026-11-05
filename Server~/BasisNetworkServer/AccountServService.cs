@@ -102,7 +102,7 @@ namespace BasisAccountServ
                     CreatedUtc = DateTime.UtcNow
                 });
                 Save_NoLock();
-                Sessions[authenticatedUuid] = NewSession(accountName);
+                Sessions[authenticatedUuid.Trim()] = NewSession(accountName);
                 return true;
             }
         }
@@ -116,12 +116,12 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (IsLocked_NoLock(authenticatedUuid)) { error = "Login temporarily locked. Try again later."; return false; }
+                if (IsLocked_NoLock(authenticatedUuid.Trim())) { error = "Login temporarily locked. Try again later."; return false; }
 
                 if (!Accounts.TryGetValue(NormalizeName(accountName), out AccountRecord account) ||
                     !string.Equals(account.OwnerUuid, authenticatedUuid.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    RecordFailure_NoLock(authenticatedUuid);
+                    RecordFailure_NoLock(authenticatedUuid.Trim());
                     error = "Invalid account name or password.";
                     return false;
                 }
@@ -148,7 +148,7 @@ namespace BasisAccountServ
                 }
 
                 Failures.Remove(authenticatedUuid);
-                Sessions[authenticatedUuid] = NewSession(account.Name);
+                Sessions[authenticatedUuid.Trim()] = NewSession(account.Name);
                 return true;
             }
         }
@@ -159,7 +159,7 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (!Sessions.TryGetValue(authenticatedUuid, out SessionRecord session))
+                if (!Sessions.TryGetValue(authenticatedUuid.Trim(), out SessionRecord session))
                     return false;
                 if (session.ExpiresUtc <= DateTime.UtcNow)
                 {
