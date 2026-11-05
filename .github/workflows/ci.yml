@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate package metadata and sample config
+      - name: Validate package metadata, protocol, and sample config
         run: |
           python3 - <<'PY'
           import json
@@ -26,22 +26,34 @@ jobs:
           config = json.loads(Path("config/accountserv.example.json").read_text(encoding="utf-8"))
 
           assert package["name"] == "com.nodokaha.accountserv"
-          assert package["basisServer"]["modules"] == [{
-              "path": "Server~/BasisNetworkServer",
-              "assembly": "BasisNetworkServer",
-          }]
+          assert package["basisServer"]["modules"] == [
+              {"path": "Runtime", "assembly": "BasisNetworkClient"},
+              {"path": "Server~/BasisNetworkServer", "assembly": "BasisNetworkServer"},
+          ]
           assert config["enabled"] is False
           assert config["security"]["minimumPasswordLength"] >= 12
           assert config["security"]["maximumFailedLogins"] > 0
           assert config["security"]["lockoutSeconds"] > 0
 
-          source = Path("Server~/BasisNetworkServer/AccountServPackage.cs")
-          assert source.is_file(), f"Missing package entry point: {source}"
-          print("Package metadata, sample config, and entry point are valid.")
+          required = [
+              "Runtime/AccountServClientPackage.cs",
+              "Runtime/BasisNetworkClient.asmref",
+              "Runtime/Unity/BasisAccountServ.Unity.asmdef",
+              "Runtime/Unity/BasisAccountServWindow.cs",
+              "Server~/BasisNetworkServer/AccountServPackage.cs",
+              "Server~/BasisNetworkServer/AccountServMessageHandler.cs",
+              "Server~/BasisNetworkServer/AccountServService.cs",
+          ]
+          for name in required:
+              assert Path(name).is_file(), f"Missing package source: {name}"
+
+          assert json.loads(Path("Runtime/BasisNetworkClient.asmref").read_text())["reference"] == "BasisNetworkClient"
+          assert json.loads(Path("Runtime/Unity/BasisAccountServ.Unity.asmdef").read_text())["name"] == "BasisAccountServ.Unity"
+          print("Package metadata, client/server source, and sample config are valid.")
           PY
 
   basis-build:
-    name: Compile package against Basis Server
+    name: Compile AccountServ client and server modules
     runs-on: ubuntu-latest
     steps:
       - name: Checkout AccountServ
@@ -61,11 +73,18 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Inject package source into BasisNetworkServer project
+      - name: Inject AccountServ source into Basis projects
         working-directory: Basis
         run: |
+          cp ../AccountServ/Runtime/*.cs "Basis Server/BasisNetworkClient/"
           cp ../AccountServ/Server~/BasisNetworkServer/*.cs \
             "Basis Server/BasisNetworkServer/"
+
+      - name: Build BasisNetworkClient with AccountServ
+        working-directory: Basis
+        run: |
+          dotnet build "Basis Server/BasisNetworkClient/BasisNetworkClient.csproj" \
+            --configuration Release
 
       - name: Build BasisNetworkServer with AccountServ
         working-directory: Basis
