@@ -1,0 +1,8 @@
+{
+  "name": "BasisAccountServ.Unity",
+  "rootNamespace": "BasisAccountServ",
+  "references": [
+    "BasisNetworkClient"
+  ],
+  "autoReferenced": true
+}
