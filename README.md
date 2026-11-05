@@ -9,7 +9,7 @@ The package consists of two parts:
 
 AccountServ uses a dedicated private client-to-server plugin-message route. It does **not** replace, intercept, inspect, or suppress Basis' ordinary `ChatChannel`. AccountServ requests are handled by the server and replies are sent only to the requesting peer.
 
-> **Development status:** The current implementation is under review in [PR #1](https://github.com/nodokaha/Basis-AccountServ/pull/1). The CI build does not replace validation in the Unity Editor or a live Basis client/server session. See [Testing](#testing) before deploying to a production server.
+> **Status:** The implementation has been merged into the repository's default branch. A successful CI build does not replace validation in the Unity Editor or a live Basis client/server session. See [Testing](#testing) before deploying to a production server.
 
 ## Features
 
@@ -30,20 +30,9 @@ AccountServ uses a dedicated private client-to-server plugin-message route. It d
 
 ## Installation
 
-The current PR is not merged yet. To test the PR, use the feature branch URL shown below. Once the change is merged, remove the `#feature/private-dm-transport` suffix and use the repository's default branch URL.
-
 ### 1. Install the server module
 
-From the Basis Server checkout, install the package and restore the server project.
-
-**For PR testing:**
-
-```bash
-basispm --project . server-install https://github.com/nodokaha/Basis-AccountServ.git#feature/private-dm-transport
-basispm --project . server-restore
-```
-
-**After the PR is merged:**
+From the Basis Server checkout, install the package from the repository's default branch and restore the server project:
 
 ```bash
 basispm --project . server-install https://github.com/nodokaha/Basis-AccountServ.git
@@ -73,17 +62,7 @@ Keep the database path on persistent storage and include it in your normal serve
 
 ### 3. Install the Unity client package
 
-For PR testing, add the feature branch URL to the Unity project's `Packages/manifest.json` under `dependencies`:
-
-```json
-{
-  "dependencies": {
-    "com.nodokaha.accountserv": "https://github.com/nodokaha/Basis-AccountServ.git#feature/private-dm-transport"
-  }
-}
-```
-
-After the PR is merged, use:
+Add the package Git URL to the Unity project's `Packages/manifest.json` under `dependencies`:
 
 ```json
 {
@@ -93,7 +72,11 @@ After the PR is merged, use:
 }
 ```
 
-You can also use Unity Package Manager's **Add package from Git URL** and enter the corresponding URL.
+You can also use Unity Package Manager's **Add package from Git URL** and enter:
+
+```
+https://github.com/nodokaha/Basis-AccountServ.git
+```
 
 The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore and registers its client plugin-message handler during Unity startup. It is not part of the server module installed by basispm.
 
