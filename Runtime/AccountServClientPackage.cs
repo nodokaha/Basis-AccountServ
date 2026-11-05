@@ -6,6 +6,18 @@ using Basis.Scripts.Networking;
 
 namespace BasisAccountServ
 {
+    internal static class AccountServClientProtocol
+    {
+        public const string MessageName = "com.nodokaha.accountserv.dm";
+        public const byte RequestRegister = 1;
+        public const byte RequestIdentify = 2;
+        public const byte RequestLogout = 3;
+        public const byte RequestStatus = 4;
+        public const byte RequestSetRole = 5;
+        public const byte ResponseMessage = 128;
+        public const int MaximumResponseBytes = 1024;
+    }
+
     /// <summary>
     /// Client half of the AccountServ private server-message channel.
     /// This does not hook or modify the ordinary Basis chat pipeline.
@@ -15,7 +27,7 @@ namespace BasisAccountServ
         public void Initialize()
         {
             BasisClientMessageRegistry.RegisterClientPlugin(
-                AccountServMessageHandler.MessageName,
+                AccountServClientProtocol.MessageName,
                 AccountServClient.HandleServerMessage);
         }
     }
@@ -28,27 +40,27 @@ namespace BasisAccountServ
             BasisClientMessageRegistry.IsPluginSupplied(AccountServMessageHandler.MessageName);
 
         public static bool Register(string accountName, string password) =>
-            Send(AccountServMessageHandler.RequestRegister, writer =>
+            Send(AccountServClientProtocol.RequestRegister, writer =>
             {
                 writer.Put(accountName ?? string.Empty);
                 writer.Put(password ?? string.Empty);
             });
 
         public static bool Identify(string accountName, string password) =>
-            Send(AccountServMessageHandler.RequestIdentify, writer =>
+            Send(AccountServClientProtocol.RequestIdentify, writer =>
             {
                 writer.Put(accountName ?? string.Empty);
                 writer.Put(password ?? string.Empty);
             });
 
         public static bool Logout() =>
-            Send(AccountServMessageHandler.RequestLogout, null);
+            Send(AccountServClientProtocol.RequestLogout, null);
 
         public static bool GetStatus() =>
-            Send(AccountServMessageHandler.RequestStatus, null);
+            Send(AccountServClientProtocol.RequestStatus, null);
 
         public static bool SetRole(string targetUuid, string role) =>
-            Send(AccountServMessageHandler.RequestSetRole, writer =>
+            Send(AccountServClientProtocol.RequestSetRole, writer =>
             {
                 writer.Put(targetUuid ?? string.Empty);
                 writer.Put(role ?? string.Empty);
@@ -70,8 +82,8 @@ namespace BasisAccountServ
             DeliveryMethod deliveryMethod)
         {
             if (!reader.TryGetByte(out byte operation) ||
-                operation != AccountServMessageHandler.ResponseMessage ||
-                reader.AvailableBytes > AccountServMessageHandler.MaximumResponseBytes)
+                operation != AccountServClientProtocol.ResponseMessage ||
+                reader.AvailableBytes > AccountServClientProtocol.MaximumResponseBytes)
             {
                 return;
             }
