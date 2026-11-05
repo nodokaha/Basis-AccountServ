@@ -103,6 +103,7 @@ namespace BasisAccountServ
                     OwnerUuid = authenticatedUuid.Trim(),
                     Salt = Convert.ToBase64String(salt),
                     PasswordHash = Convert.ToBase64String(storedKey),
+                    CredentialVersion = 2,
                     CreatedUtc = DateTime.UtcNow
                 });
                 Save_NoLock();
@@ -163,6 +164,7 @@ namespace BasisAccountServ
                     OwnerUuid = authenticatedUuid.Trim(),
                     Salt = Convert.ToBase64String(salt),
                     PasswordHash = Convert.ToBase64String(verifier),
+                    CredentialVersion = 2,
                     CreatedUtc = DateTime.UtcNow
                 });
                 Save_NoLock();
@@ -206,6 +208,12 @@ namespace BasisAccountServ
                 {
                     RecordFailure_NoLock(uuid);
                     error = "Invalid account or password.";
+                    return false;
+                }
+
+                if (!UpgradeLegacyCredential_NoLock(account))
+                {
+                    error = "Stored account credentials are invalid. Contact the server administrator.";
                     return false;
                 }
 
@@ -353,12 +361,25 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                DeriveCredentialKeys(password, salt, out byte[] actual, out _);
+                byte[] actual;
+                if (account.CredentialVersion < 2)
+                    actual = DeriveHash(password, salt);
+                else
+                    DeriveCredentialKeys(password, salt, out actual, out _);
+
                 if (!CryptographicOperations.FixedTimeEquals(actual, expected))
                 {
                     RecordFailure_NoLock(authenticatedUuid);
                     error = "Invalid account name or password.";
                     return false;
+                }
+
+                if (account.CredentialVersion < 2)
+                {
+                    DeriveCredentialKeys(password, salt, out byte[] upgradedStoredKey, out _);
+                    account.PasswordHash = Convert.ToBase64String(upgradedStoredKey);
+                    account.CredentialVersion = 2;
+                    Save_NoLock();
                 }
 
                 Failures.Remove(authenticatedUuid);
@@ -465,6 +486,31 @@ namespace BasisAccountServ
             ExpiresUtc = DateTime.UtcNow.AddMinutes(_sessionLifetimeMinutes)
         };
 
+        private static bool UpgradeLegacyCredential_NoLock(AccountRecord account)
+        {
+            if (account.CredentialVersion >= 2) return true;
+            try
+            {
+                byte[] legacyPbkdf2 = Convert.FromBase64String(account.PasswordHash ?? string.Empty);
+                if (legacyPbkdf2.Length != HashSize) return false;
+                byte[] clientKey;
+                using (var hmac = new HMACSHA256(legacyPbkdf2))
+                    clientKey = hmac.ComputeHash(Encoding.UTF8.GetBytes("Client Key"));
+                byte[] storedKey;
+                using (SHA256 sha = SHA256.Create())
+                    storedKey = sha.ComputeHash(clientKey);
+                account.PasswordHash = Convert.ToBase64String(storedKey);
+                account.CredentialVersion = 2;
+                Save_NoLock();
+                Array.Clear(clientKey, 0, clientKey.Length);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static byte[] DeriveHash(string password, byte[] salt)
         {
             using (var derive = new Rfc2898DeriveBytes(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
@@ -546,6 +592,7 @@ namespace BasisAccountServ
             public string OwnerUuid { get; set; }
             public string Salt { get; set; }
             public string PasswordHash { get; set; }
+            public int CredentialVersion { get; set; }
             public DateTime CreatedUtc { get; set; }
         }
 
