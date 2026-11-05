@@ -1,10 +1,23 @@
 # Basis AccountServ
 
-Anope-inspired account and operator services for [Basis Server](https://github.com/BasisVR/Basis), distributed as an independent Basis Server package and installed with `basispm`.
+Anope-inspired account and operator services for [Basis](https://github.com/BasisVR/Basis). The package provides a private client-to-server AccountServ message channel and a small in-game management panel. It does not replace or intercept Basis' ordinary chat.
 
-> **Development status: minimal account API implemented.** Persistent account registration, PBKDF2 password verification, UUID-bound sessions, lockout, and guarded operator-role assignment are implemented. Chat commands and a console command adapter are not implemented.
+## Features
+
+- Account registration bound to the authenticated Basis UUID
+- Identify / logout / session status
+- PBKDF2-HMAC-SHA256 password derivation
+- One-time challenge-response authentication; the password itself is never sent over the network
+- Failed-login lockout and expiring sessions
+- Admin/moderator role assignment through Basis' existing permission groups
+- Private F8 panel in the Unity client
+- Ordinary public chat continues to work unchanged
 
 ## Installation
+
+AccountServ has a server half and a Unity client half. Install both.
+
+### Basis Server
 
 From a Basis Server checkout:
 
@@ -13,13 +26,70 @@ basispm --project . server-install https://github.com/nodokaha/Basis-AccountServ
 basispm --project . server-restore
 ```
 
-Copy `config/accountserv.example.json` to the server's `config/accountserv.json`, then set `enabled` to `true`.
+Copy `config/accountserv.example.json` to `config/accountserv.json`, then set `enabled` to `true`.
 
-The package is compiled into the `BasisNetworkServer` assembly using Basis' `basisServer.modules` package mechanism.
+### Unity client
 
-## Implemented API
+Add the Git package to the Unity project's `Packages/manifest.json` dependencies:
 
-The service is available to trusted server-side code through `BasisAccountServ.AccountServService`:
+```json
+{
+  "dependencies": {
+    "com.nodokaha.accountserv": "https://github.com/nodokaha/Basis-AccountServ.git"
+  }
+}
+```
+
+Alternatively, add the repository URL through Unity Package Manager's **Add package from Git URL**.
+
+After the package is imported and the client connects to a server with AccountServ enabled, press **F8** to open the AccountServ panel.
+
+The panel communicates over a dedicated reliable plugin message registered through Basis' dynamic message registry. The server replies only to the requesting authenticated peer. The message does not use `ChatChannel` and is not broadcast to other players.
+
+## Using the panel
+
+| Panel | Action |
+|---|---|
+| Register | Create an account and automatically identify |
+| Identify | Sign in to an account already bound to this Basis UUID |
+| Status | Check the current AccountServ session |
+| Logout | End the AccountServ session |
+| Operator | Assign `admin`, `moderator`, or `none` to a target Basis UUID |
+
+The Operator page is accepted only when the requesting UUID is already in Basis' `admin` group. AccountServ does not provide a way to bootstrap the first administrator; use Basis' existing administrator configuration.
+
+## Password and message security
+
+- The client generates a random 16-byte salt and derives credential keys with PBKDF2-HMAC-SHA256 (210,000 iterations).
+- Registration sends the salt and a SCRAM-style stored key, not the password.
+- Identification uses a random 32-byte, one-use challenge that expires after one minute. The client sends a proof derived from the password; the server verifies it against the stored key.
+- Failed identify attempts are counted per authenticated Basis UUID and trigger the configured temporary lockout.
+- The private plugin channel is a routing boundary, not a claim that every Basis transport encrypts all packets. Use a trusted network/secure transport when confidentiality of all traffic is required.
+
+The client currently enforces a 12-character minimum locally. The server also checks the configured minimum against the reported password length; because the password is intentionally never transmitted, a modified client can bypass this client-side length policy. AccountServ must never treat password length as an authorization boundary.
+
+## Server configuration
+
+`config/accountserv.example.json`:
+
+```json
+{
+  "enabled": true,
+  "database": "config/accountserv.db",
+  "security": {
+    "minimumPasswordLength": 12,
+    "maximumFailedLogins": 5,
+    "lockoutSeconds": 300,
+    "sessionLifetimeMinutes": 1440
+  }
+}
+```
+
+Accounts are stored in `config/accountserv.db`. Sessions and pending challenges are held in memory; sessions are cleared when the server restarts.
+
+## Server-side API
+
+Trusted server-side modules can call `BasisAccountServ.AccountServService`:
 
 - `Register(authenticatedUuid, accountName, password, out error)`
 - `Identify(authenticatedUuid, accountName, password, out error)`
@@ -29,52 +99,21 @@ The service is available to trusted server-side code through `BasisAccountServ.A
 - `ListAccounts()`
 - `SetOperatorRole(actorUuid, targetUuid, role, out error)`
 
-Example (the UUID must come from Basis' authenticated peer identity, not from client input):
+For network clients, use the private message endpoint; do not add a handler that accepts a client-provided UUID or a plaintext password.
 
-```csharp
-if (NetworkServer.AuthIdentity.NetIDToUUID(peer, out string uuid))
-{
-    if (AccountServService.Identify(uuid, accountName, password, out string error))
-    {
-        // This Basis identity now has an AccountServ session.
-    }
-}
-```
+## Architecture and limitations
 
-### Current behavior
+- The server registers `com.nodokaha.accountserv.dm` as a reliable-ordered plugin message.
+- The client registers a matching handler with `BasisClientMessageRegistry`.
+- The server resolves the caller UUID from `NetworkServer.AuthIdentity.NetIDToUUID(peer, ...)`.
+- All role changes are authorized server-side against Basis' existing `admin` group.
+- The AccountServ panel is a private client-to-server interface, not player-to-player direct messaging.
+- Ordinary `ChatChannel` handling is not modified, suppressed, or observed.
+- The Unity client package must be installed separately from the server's basispm package.
 
-- Accounts are stored in `config/accountserv.db` as JSON. Passwords are stored only as salted PBKDF2-HMAC-SHA256 hashes.
-- An account is bound to the Basis UUID that registered it. Another UUID cannot identify into that account.
-- Sessions are in-memory and expire after the configured lifetime; server restart logs all sessions out.
-- Login failures are rate-limited per UUID with a temporary lockout.
-- Operator roles use Basis' existing permission groups. Only a UUID already in Basis' `admin` group can call `SetOperatorRole`; supported roles are `admin`, `moderator`, and `none`.
-- The configured minimum password length, failed-login limit, lockout duration, and session lifetime are applied at startup.
+## CI
 
-## Not implemented yet
-
-- `!nick register / identify / info / logout` chat commands
-- `!oper` chat commands and server-console command registration
-- Automatic bootstrap from `bootstrap.operatorUuids`
-- Account linking for multiple Basis UUIDs
-
-The current `BasisNetworkChat.HandleChatMessage` path does not expose a public pre-broadcast message event. This implementation intentionally does not intercept or suppress ordinary chat. It exposes the account API so other trusted server modules can use it now; a future command adapter can call the same API if Basis later exposes a suitable input hook.
-
-## Security notes
-
-- Pass only UUIDs resolved from the authenticated Basis peer via `NetworkServer.AuthIdentity`.
-- Never accept a UUID, role, or permission flag supplied by a client as proof of identity.
-- The account database contains password hashes and should be backed up and access-restricted like other server secrets.
-- The service does not replace Basis' permission manager.
-
-## CI validation
-
-GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch.
-
-- Validates package metadata and the example configuration.
-- Checks out the `developer` branch of the official `BasisVR/Basis` repository.
-- Injects the package source into `BasisNetworkServer` and builds the project with .NET 10.
-
-The CI build is the compatibility check against the upstream server. It does not yet provide automated behavioral tests for account registration and authentication.
+GitHub Actions validates package metadata and compiles both the `BasisNetworkClient` and `BasisNetworkServer` modules against the `developer` branch of the official Basis repository. The Unity-only IMGUI panel is source-validated but cannot be compiled by the .NET server CI because it depends on Unity assemblies.
 
 ## License
 
