@@ -1,79 +1,58 @@
 # Basis AccountServ
 
-Anope-inspired account and operator services for [Basis](https://github.com/BasisVR/Basis). The package provides a private client-to-server AccountServ message channel and a small in-game management panel. It does not replace or intercept Basis' ordinary chat.
+Anope-inspired account and operator services for [Basis](https://github.com/BasisVR/Basis). AccountServ adds account registration, authentication, session management, and administrator-controlled role assignment.
+
+The package consists of two parts:
+
+- **Basis Server module** — installed with `basispm`.
+- **Unity client module** — installed separately through Unity Package Manager (UPM).
+
+AccountServ uses a dedicated private client-to-server plugin-message route. It does **not** replace, intercept, inspect, or suppress Basis' ordinary `ChatChannel`. AccountServ requests are handled by the server and replies are sent only to the requesting peer.
+
+> **Development status:** The current implementation is under review in [PR #1](https://github.com/nodokaha/Basis-AccountServ/pull/1). The CI build does not replace validation in the Unity Editor or a live Basis client/server session. See [Testing](#testing) before deploying to a production server.
 
 ## Features
 
-- Account registration bound to the authenticated Basis UUID
-- Identify / logout / session status
-- PBKDF2-HMAC-SHA256 password derivation
+- Register an AccountServ account bound to the authenticated Basis UUID
+- Identify, logout, and inspect the current AccountServ session
+- PBKDF2-HMAC-SHA256 credential derivation
 - One-time challenge-response authentication; the password itself is never sent over the network
 - Failed-login lockout and expiring sessions
-- Admin/moderator role assignment through Basis' existing permission groups
-- Private F8 panel in the Unity client
-- Ordinary public chat continues to work unchanged
+- Assign `admin`, `moderator`, or `none` roles through Basis' existing permission groups
+- In-game Unity management panel opened with **F8**
+- Ordinary public chat remains unchanged
+
+## Requirements
+
+- A Basis Server checkout with `basispm` available
+- A Unity client project using the compatible Basis Framework and BasisNetworkCore assemblies
+- The AccountServ server module and Unity client package must both be installed
 
 ## Installation
 
-AccountServ has a server half and a Unity client half. Install both.
+The current PR is not merged yet. To test the PR, use the feature branch URL shown below. Once the change is merged, remove the `#feature/private-dm-transport` suffix and use the repository's default branch URL.
 
-### Basis Server
+### 1. Install the server module
 
-From a Basis Server checkout:
+From the Basis Server checkout, install the package and restore the server project.
+
+**For PR testing:**
+
+```bash
+basispm --project . server-install https://github.com/nodokaha/Basis-AccountServ.git#feature/private-dm-transport
+basispm --project . server-restore
+```
+
+**After the PR is merged:**
 
 ```bash
 basispm --project . server-install https://github.com/nodokaha/Basis-AccountServ.git
 basispm --project . server-restore
 ```
 
-Copy `config/accountserv.example.json` to `config/accountserv.json`, then set `enabled` to `true`.
+### 2. Configure the server
 
-### Unity client
-
-Add the Git package to the Unity project's `Packages/manifest.json` dependencies:
-
-```json
-{
-  "dependencies": {
-    "com.nodokaha.accountserv": "https://github.com/nodokaha/Basis-AccountServ.git"
-  }
-}
-```
-
-Alternatively, add the repository URL through Unity Package Manager's **Add package from Git URL**.
-
-After the package is imported and the client connects to a server with AccountServ enabled, press **F8** to open the AccountServ panel.
-
-The Unity client integration is compiled into its own assembly referencing Basis Framework and BasisNetworkCore. The server half is installed separately through basispm.
-
-The panel communicates over a dedicated reliable plugin message registered through Basis' dynamic message registry. The server replies only to the requesting authenticated peer. The message does not use `ChatChannel` and is not broadcast to other players.
-
-## Using the panel
-
-| Panel | Action |
-|---|---|
-| Register | Create an account and automatically identify |
-| Identify | Sign in to an account already bound to this Basis UUID |
-| Status | Check the current AccountServ session |
-| Logout | End the AccountServ session |
-| Operator | Assign `admin`, `moderator`, or `none` to a target Basis UUID |
-
-The Operator page is accepted only when the requesting UUID is already in Basis' `admin` group. AccountServ does not provide a way to bootstrap the first administrator; use Basis' existing administrator configuration.
-
-## Password and message security
-
-- The client generates a random 16-byte salt and derives credential keys with PBKDF2-HMAC-SHA256 (210,000 iterations).
-- Registration sends the salt and a SCRAM-style stored key, not the password.
-- Identification uses a random 32-byte, one-use challenge that expires after one minute. The client sends a proof derived from the password; the server verifies it against the stored key.
-- Failed identify attempts are counted per authenticated Basis UUID and trigger the configured temporary lockout.
-- Accounts created by the earlier PBKDF2-only package version are upgraded to the stored-key format on their first challenge-based identify attempt.
-- The private plugin channel is a routing boundary, not a claim that every Basis transport encrypts all packets. Use a trusted network/secure transport when confidentiality of all traffic is required.
-
-The client currently enforces a 12-character minimum locally. The server also checks the configured minimum against the reported password length; because the password is intentionally never transmitted, a modified client can bypass this client-side length policy. AccountServ must never treat password length as an authorization boundary.
-
-## Server configuration
-
-`config/accountserv.example.json`:
+Copy `config/accountserv.example.json` to `config/accountserv.json` and edit the copy:
 
 ```json
 {
@@ -88,11 +67,81 @@ The client currently enforces a 12-character minimum locally. The server also ch
 }
 ```
 
-Accounts are stored in `config/accountserv.db`. Sessions and pending challenges are held in memory; sessions are cleared when the server restarts.
+The example file intentionally defaults to `"enabled": false`. Set it to `true` in your active `accountserv.json` only when you are ready to enable AccountServ.
+
+Keep the database path on persistent storage and include it in your normal server backup plan. Do not commit the live configuration or account database to a public repository.
+
+### 3. Install the Unity client package
+
+For PR testing, add the feature branch URL to the Unity project's `Packages/manifest.json` under `dependencies`:
+
+```json
+{
+  "dependencies": {
+    "com.nodokaha.accountserv": "https://github.com/nodokaha/Basis-AccountServ.git#feature/private-dm-transport"
+  }
+}
+```
+
+After the PR is merged, use:
+
+```json
+{
+  "dependencies": {
+    "com.nodokaha.accountserv": "https://github.com/nodokaha/Basis-AccountServ.git"
+  }
+}
+```
+
+You can also use Unity Package Manager's **Add package from Git URL** and enter the corresponding URL.
+
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore and registers its client plugin-message handler during Unity startup. It is not part of the server module installed by basispm.
+
+### 4. Open the panel
+
+Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Press **F8** to open the AccountServ panel.
+
+## Using the panel
+
+| Panel action | Description |
+|---|---|
+| Register | Create an account for the authenticated Basis UUID and identify |
+| Identify | Authenticate an existing account bound to this Basis UUID |
+| Status | Check the current AccountServ session |
+| Logout | End the current AccountServ session |
+| Operator | Assign `admin`, `moderator`, or `none` to a target Basis UUID |
+
+The Operator action is accepted only when the requesting authenticated UUID is already in Basis' `admin` permission group. AccountServ does not bootstrap the first administrator. Configure the initial administrator through Basis' existing administrator/permission setup before using role management.
+
+## Password and authentication security
+
+- The client generates a random 16-byte salt and derives credential material with PBKDF2-HMAC-SHA256 using 210,000 iterations.
+- Registration sends the salt and a SCRAM-style stored key, not the password.
+- During Identify, the server issues a random 32-byte one-time challenge. The challenge expires after one minute.
+- The client returns a proof derived from the password. The server verifies that proof against the stored key.
+- Failed Identify attempts are counted per authenticated Basis UUID and can trigger the configured temporary lockout.
+- Accounts created by the earlier PBKDF2-only package version are upgraded to the stored-key format on their first challenge-based Identify attempt.
+
+The private plugin channel provides message routing and peer scoping; it is **not** a claim that every Basis transport encrypts every packet. Use a trusted network or a secure transport when confidentiality of all traffic is required.
+
+The client currently enforces a 12-character minimum locally. The server checks the configured minimum against the reported password length, but the password is intentionally never transmitted. A modified client can therefore falsify this reported length. Password length validation must not be treated as an authorization or anti-compromise boundary.
+
+## Server configuration reference
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `enabled` | `false` | Enables or disables AccountServ |
+| `database` | `config/accountserv.db` | Account database path |
+| `security.minimumPasswordLength` | `12` | Client-side minimum; see the security note above |
+| `security.maximumFailedLogins` | `5` | Failed Identify attempts before lockout |
+| `security.lockoutSeconds` | `300` | Lockout duration |
+| `security.sessionLifetimeMinutes` | `1440` | AccountServ session lifetime |
+
+Accounts are stored in the configured database. Active sessions and pending authentication challenges are held in memory; sessions are cleared when the server restarts.
 
 ## Server-side API
 
-Trusted server-side modules can call `BasisAccountServ.AccountServService`:
+Trusted server-side modules can use `BasisAccountServ.AccountServService`:
 
 - `Register(authenticatedUuid, accountName, password, out error)`
 - `Identify(authenticatedUuid, accountName, password, out error)`
@@ -102,21 +151,35 @@ Trusted server-side modules can call `BasisAccountServ.AccountServService`:
 - `ListAccounts()`
 - `SetOperatorRole(actorUuid, targetUuid, role, out error)`
 
-For network clients, use the private message endpoint; do not add a handler that accepts a client-provided UUID or a plaintext password.
+These APIs are for trusted server-side code. Network clients must use the private message endpoint. Do not expose an endpoint that trusts a client-provided UUID or accepts a plaintext password from the network.
 
-## Architecture and limitations
+## Architecture and boundaries
 
 - The server registers `com.nodokaha.accountserv.dm` as a reliable-ordered plugin message.
-- The Unity client registers a matching handler with `BasisClientMessageRegistry`.
-- The server resolves the caller UUID from `NetworkServer.AuthIdentity.NetIDToUUID(peer, ...)`.
-- All role changes are authorized server-side against Basis' existing `admin` group.
-- The AccountServ panel is a private client-to-server interface, not player-to-player direct messaging.
-- Ordinary `ChatChannel` handling is not modified, suppressed, or observed.
-- The Unity client package must be installed separately from the server's basispm package.
+- The Unity client registers the matching handler with `BasisClientMessageRegistry`.
+- The server derives the caller's UUID from the authenticated peer using Basis' network identity mapping; it does not trust a UUID supplied in the request.
+- Replies are sent only to the requesting peer and are not broadcast to other players.
+- Role changes are authorized server-side against Basis' existing `admin` permission group.
+- The F8 panel is a private client-to-server AccountServ interface, not player-to-player direct messaging.
+- Ordinary `ChatChannel` handling is not modified, intercepted, observed, or suppressed.
+- The server and Unity client components are installed independently.
 
-## CI
+## Testing
 
-GitHub Actions validates package metadata and compiles the server module against the `developer` branch of the official Basis repository. The Unity-only client assembly is checked for required source files and assembly references; it requires the Unity editor and is not compiled by the .NET server CI.
+The GitHub Actions workflow validates package metadata/configuration and builds the server module against the official Basis `developer` branch. The Unity-only client assembly requires Unity assemblies; source and assembly-reference checks in CI are not equivalent to a Unity Editor compilation.
+
+Before production use, validate the following in a compatible Unity Editor and a test Basis server:
+
+1. The Unity project imports `com.nodokaha.accountserv` without assembly or compilation errors.
+2. With AccountServ enabled on the server, the client can open the panel with F8.
+3. Register creates an account associated with the connected Basis UUID.
+4. Identify succeeds for the matching account and Status reports the session.
+5. Logout clears the session; a subsequent Status reflects that state.
+6. An existing Basis `admin` can assign `admin`, `moderator`, and `none`; a non-admin cannot change roles.
+7. Replies are visible only to the requesting client.
+8. Ordinary public chat continues to work normally and is not intercepted by AccountServ.
+
+Use test accounts and a non-production server for this validation. Do not treat a successful CI run alone as proof of live network or Unity runtime compatibility.
 
 ## License
 
