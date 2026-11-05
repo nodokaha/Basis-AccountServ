@@ -44,6 +44,8 @@ Alternatively, add the repository URL through Unity Package Manager's **Add pack
 
 After the package is imported and the client connects to a server with AccountServ enabled, press **F8** to open the AccountServ panel.
 
+The Unity client integration is compiled into its own assembly referencing Basis Framework and BasisNetworkCore. The server half is installed separately through basispm.
+
 The panel communicates over a dedicated reliable plugin message registered through Basis' dynamic message registry. The server replies only to the requesting authenticated peer. The message does not use `ChatChannel` and is not broadcast to other players.
 
 ## Using the panel
@@ -104,7 +106,7 @@ For network clients, use the private message endpoint; do not add a handler that
 ## Architecture and limitations
 
 - The server registers `com.nodokaha.accountserv.dm` as a reliable-ordered plugin message.
-- The client registers a matching handler with `BasisClientMessageRegistry`.
+- The Unity client registers a matching handler with `BasisClientMessageRegistry`.
 - The server resolves the caller UUID from `NetworkServer.AuthIdentity.NetIDToUUID(peer, ...)`.
 - All role changes are authorized server-side against Basis' existing `admin` group.
 - The AccountServ panel is a private client-to-server interface, not player-to-player direct messaging.
@@ -113,7 +115,7 @@ For network clients, use the private message endpoint; do not add a handler that
 
 ## CI
 
-GitHub Actions validates package metadata and compiles both the `BasisNetworkClient` and `BasisNetworkServer` modules against the `developer` branch of the official Basis repository. The Unity-only IMGUI panel is source-validated but cannot be compiled by the .NET server CI because it depends on Unity assemblies.
+GitHub Actions validates package metadata and compiles the server module against the `developer` branch of the official Basis repository. The Unity-only client assembly is checked for required source files and assembly references; it requires the Unity editor and is not compiled by the .NET server CI.
 
 ## License
 
