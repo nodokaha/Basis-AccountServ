@@ -9,8 +9,6 @@ The package consists of two parts:
 
 AccountServ uses a dedicated private client-to-server plugin-message route. It does **not** replace, intercept, inspect, or suppress Basis' ordinary `ChatChannel`. AccountServ requests are handled by the server and replies are sent only to the requesting peer.
 
-> **Status:** The implementation has been merged into the repository's default branch. A successful CI build does not replace validation in the Unity Editor or a live Basis client/server session. See [Testing](#testing) before deploying to a production server.
-
 ## Features
 
 - Register an AccountServ account bound to the authenticated Basis UUID
