@@ -14,7 +14,7 @@ public static class BasisDidKey
     public static bool TryDecodeEd25519PublicKey(string did, out byte[] publicKey)
     {
         publicKey = [];
-        if (string.IsNullOrEmpty(did) || !did.StartsWith(Prefix, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(did) || did.Length > 128 || !did.StartsWith(Prefix, StringComparison.Ordinal))
             return false;
 
         var encoded = did[Prefix.Length..];
