@@ -62,6 +62,7 @@ accountserv-postgres volume before upgrades and production migration work.
 ## Local deployment
 
     export POSTGRES_PASSWORD='replace-with-a-long-random-secret'
+    export DID_PROOF_ISSUER='https://auth.example.com'
     docker compose -f compose.central-auth.yaml up -d --build
 
 The API listens on port 8080 inside the Compose network. Do not publish the
