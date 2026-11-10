@@ -69,6 +69,34 @@ The API listens on port 8080 inside the Compose network. Do not publish the
 PostgreSQL port. In Coolify, expose only the API service through HTTPS after
 OIDC and API authentication are implemented; keep the database private.
 
+## Build and validation scope
+
+The current GitHub Actions workflow does **not** compile the Unity client assembly.
+Its jobs cover different parts of the repository:
+
+| CI job | What it actually verifies | What it does not verify |
+|---|---|---|
+| Package metadata and configuration | Parses package/config JSON, checks required source files exist, and checks expected strings in the Unity asmdef references | C# syntax, type resolution, Unity API compatibility, or assembly compilation |
+| Compile AccountServ server module | Injects the server module source into the checked-out official Basis `developer` branch and runs `dotnet build` for `BasisNetworkServer` | Unity client code |
+| Build central authentication API | Builds the ASP.NET Core central API with .NET 10 | Unity client code or the Basis server plugin |
+| Test Basis DID proof verification | Runs the central API's .NET unit tests | Unity client code or an in-game DID linking flow |
+
+In particular, a green `package-validation` job is only a metadata/source-presence
+check. It must not be described as a successful client build. The Unity-only
+`BasisAccountServ.Unity` assembly depends on Unity and Basis assemblies and
+requires a compatible Unity project/editor to perform a real compilation.
+
+Until a Unity Editor build job is added, client compilation remains a manual
+validation step. Open a test project using the same Basis Framework and
+BasisNetworkCore version targeted by this package, add this repository through
+UPM, allow Unity to import/recompile scripts, and confirm the Console contains
+no C# compilation errors. A successful import alone is not sufficient if
+compilation errors remain. Also test the panel and plugin-message behavior on a
+test server; compilation does not prove runtime compatibility.
+
+Do not infer client compatibility solely from the server-module build, central
+API build, package metadata checks, or DID proof unit tests.
+
 ## Compatibility constraints
 
 ## Basis DID proof-of-possession
