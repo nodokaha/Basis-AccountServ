@@ -46,6 +46,16 @@ jobs:
           for name in required:
               assert Path(name).is_file(), f"Missing package source: {name}"
 
+          unity_assets = [
+              "Runtime.meta",
+              "Runtime/Unity.meta",
+              "Runtime/Unity/AccountServClientPackage.cs.meta",
+              "Runtime/Unity/BasisAccountServ.Unity.asmdef.meta",
+              "Runtime/Unity/BasisAccountServWindow.cs.meta",
+          ]
+          for name in unity_assets:
+              assert Path(name).is_file(), f"Missing Unity metadata file: {name}"
+
           asmdef = json.loads(Path("Runtime/Unity/BasisAccountServ.Unity.asmdef").read_text())
           assert "Basis Framework" in asmdef["references"]
           assert "BasisNetworkCore" in asmdef["references"]
