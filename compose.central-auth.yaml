@@ -21,6 +21,7 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__AccountServ: Host=accountserv-db;Port=5432;Database=accountserv;Username=accountserv;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+      DID_PROOF_ISSUER: ${DID_PROOF_ISSUER:?Set DID_PROOF_ISSUER to the canonical HTTPS issuer URL}
     depends_on:
       accountserv-db:
         condition: service_healthy
