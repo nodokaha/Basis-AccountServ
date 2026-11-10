@@ -43,4 +43,4 @@ await using (var transaction = await connection.BeginTransactionAsync())
 app.Lifetime.ApplicationStopped.Register(dataSource.Dispose);
 app.Run();
 
-public partial class Program;
+public partial class Program { }
