@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
     did VARCHAR(128) NOT NULL CHECK (did LIKE 'did:key:z%'),
     nonce_hash BYTEA NOT NULL UNIQUE,
     verifier_context TEXT NOT NULL,
+    signed_payload BYTEA NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
