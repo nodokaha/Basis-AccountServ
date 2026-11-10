@@ -9,8 +9,6 @@ The package consists of two parts:
 
 AccountServ uses a dedicated private client-to-server plugin-message route. It does **not** replace, intercept, inspect, or suppress Basis' ordinary `ChatChannel`. AccountServ requests are handled by the server and replies are sent only to the requesting peer.
 
-> **Status:** The implementation has been merged into the repository's default branch. A successful CI build does not replace validation in the Unity Editor or a live Basis client/server session. See [Testing](#testing) before deploying to a production server.
-
 ## Features
 
 - Register an AccountServ account bound to the authenticated Basis UUID
@@ -149,9 +147,17 @@ These APIs are for trusted server-side code. Network clients must use the privat
 
 ## Testing
 
-The GitHub Actions workflow validates package metadata/configuration and builds the server module against the official Basis `developer` branch. The Unity-only client assembly requires Unity assemblies; source and assembly-reference checks in CI are not equivalent to a Unity Editor compilation.
+The current GitHub Actions workflow does **not** compile the Unity client assembly.
+Its checks are split as follows:
 
-Before production use, validate the following in a compatible Unity Editor and a test Basis server:
+- **Package metadata and configuration:** parses package/config JSON, checks required source files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
+- **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
+- **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
+- **Test Basis DID proof verification:** runs the central API's .NET unit tests.
+
+Therefore, a green CI run does not establish that `BasisAccountServ.Unity` compiles. The Unity client assembly depends on Unity and Basis assemblies and must be compiled in a compatible Unity project/editor. Until a Unity Editor build job is added, this remains a manual validation step.
+
+Before production use, open a test project using the same Basis Framework and BasisNetworkCore version targeted by this package, add this repository through UPM, let Unity import and compile the package, and confirm the Console contains no C# compilation errors. Then validate the following in a compatible Unity Editor and a test Basis server:
 
 1. The Unity project imports `com.nodokaha.accountserv` without assembly or compilation errors.
 2. With AccountServ enabled on the server, the client can open the panel with F8.
