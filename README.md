@@ -39,7 +39,14 @@ basispm --project . server-restore
 
 ### 2. Configure the server
 
-Copy `config/accountserv.example.json` to `config/accountserv.json` and edit the copy:
+The Basis Server module reads `config/accountserv.json` relative to the Basis Server process working directory when `NetworkServer.ServerStarted` fires. The repository contains only the template `config/accountserv.example.json`; copy it to the live filename and edit it:
+
+```bash
+mkdir -p config
+cp config/accountserv.example.json config/accountserv.json
+```
+
+Example:
 
 ```json
 {
@@ -54,9 +61,35 @@ Copy `config/accountserv.example.json` to `config/accountserv.json` and edit the
 }
 ```
 
-The example file intentionally defaults to `"enabled": false`. Set it to `true` in your active `accountserv.json` only when you are ready to enable AccountServ.
+The example intentionally defaults to `"enabled": false`. Set it to `true` in the live file only when you are ready to enable AccountServ.
 
-Keep the database path on persistent storage and include it in your normal server backup plan. Do not commit the live configuration or account database to a public repository.
+#### Environment variables
+
+The server module can also be configured entirely through environment variables. Environment variables override JSON values, and JSON values override built-in defaults. If the JSON file does not exist, the module can still start when `ACCOUNTSERV_ENABLED=true` is supplied.
+
+| Environment variable | Default | Description |
+|---|---:|---|
+| `ACCOUNTSERV_CONFIG_FILE` | `config/accountserv.json` | JSON config file path |
+| `ACCOUNTSERV_ENABLED` | `false` | Enables AccountServ |
+| `ACCOUNTSERV_DATABASE` | `config/accountserv.db` | Account database path |
+| `ACCOUNTSERV_SECURITY_MINIMUM_PASSWORD_LENGTH` | `12` | Minimum reported password length |
+| `ACCOUNTSERV_SECURITY_MAXIMUM_FAILED_LOGINS` | `5` | Failed Identify attempts before lockout |
+| `ACCOUNTSERV_SECURITY_LOCKOUT_SECONDS` | `300` | Lockout duration |
+| `ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES` | `1440` | AccountServ session lifetime |
+
+For example, set these on the **Basis Server container/service** in Docker Compose or Coolify:
+
+```yaml
+environment:
+  ACCOUNTSERV_ENABLED: "true"
+  ACCOUNTSERV_DATABASE: "/data/accountserv.db"
+  ACCOUNTSERV_SECURITY_MINIMUM_PASSWORD_LENGTH: "12"
+  ACCOUNTSERV_SECURITY_MAXIMUM_FAILED_LOGINS: "5"
+  ACCOUNTSERV_SECURITY_LOCKOUT_SECONDS: "300"
+  ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES: "1440"
+```
+
+You can omit the JSON file when all required values are provided through environment variables. The database path should point to persistent storage; back it up with the rest of your server data. Do not commit live configuration or account database files to a public repository. Restart the Basis Server after changing environment variables or the JSON file; configuration is read at server startup.
 
 ### 3. Install the Unity client package
 

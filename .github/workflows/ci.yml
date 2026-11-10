@@ -35,6 +35,19 @@ jobs:
           assert config["security"]["maximumFailedLogins"] > 0
           assert config["security"]["lockoutSeconds"] > 0
 
+          server_config = Path("Server~/BasisNetworkServer/AccountServPackage.cs").read_text(encoding="utf-8")
+          environment_variables = [
+              "ACCOUNTSERV_CONFIG_FILE",
+              "ACCOUNTSERV_ENABLED",
+              "ACCOUNTSERV_DATABASE",
+              "ACCOUNTSERV_SECURITY_MINIMUM_PASSWORD_LENGTH",
+              "ACCOUNTSERV_SECURITY_MAXIMUM_FAILED_LOGINS",
+              "ACCOUNTSERV_SECURITY_LOCKOUT_SECONDS",
+              "ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES",
+          ]
+          for name in environment_variables:
+              assert name in server_config, f"Missing server environment variable support: {name}"
+
           required = [
               "Runtime/Unity/AccountServClientPackage.cs",
               "Runtime/Unity/BasisAccountServ.Unity.asmdef",
