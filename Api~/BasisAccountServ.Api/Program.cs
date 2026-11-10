@@ -106,6 +106,9 @@ app.MapPost("/api/did/link/challenges/{challengeId:guid}/complete", async (
     if (!TryGetAccountId(context.User, out var accountId))
         return Results.Unauthorized();
 
+    if (string.IsNullOrWhiteSpace(request.Signature) || request.Signature.Length > 128)
+        return Results.BadRequest(new { error = "invalid_signature_encoding" });
+
     byte[] signature;
     try { signature = WebEncoders.Base64UrlDecode(request.Signature); }
     catch (FormatException) { return Results.BadRequest(new { error = "invalid_signature_encoding" }); }
@@ -187,7 +190,6 @@ await using (var transaction = await connection.BeginTransactionAsync())
 app.Lifetime.ApplicationStopped.Register(dataSource.Dispose);
 app.Run();
 
-public partial class Program { }
 
 static bool TryGetAccountId(ClaimsPrincipal principal, out Guid accountId)
 {
@@ -197,6 +199,8 @@ static bool TryGetAccountId(ClaimsPrincipal principal, out Guid accountId)
     var subject = principal.FindFirstValue("sub") ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
     return Guid.TryParse(subject, out accountId);
 }
+
+public partial class Program { }
 
 public sealed record CreateDidLinkChallengeRequest(string Did);
 public sealed record CompleteDidLinkChallengeRequest(string Signature);
