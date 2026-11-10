@@ -167,3 +167,17 @@ Use test accounts and a non-production server for this validation. Do not treat 
 ## License
 
 MIT
+
+
+## Central authentication service
+
+The repository now includes the first deployment foundation for a shared AccountServ
+identity service. See [Central authentication architecture](docs/central-auth.md)
+for the API service, PostgreSQL identity schema, server-scoped role model, and
+deployment boundary.
+
+The central API foundation is not yet a public login provider: OIDC endpoints,
+account registration/login, and dashboard visitor sessions are intentionally
+not exposed until the complete Authorization Code + PKCE flow is implemented.
+The existing Basis plugin-message flow remains operational and ordinary chat
+handling is unchanged.
