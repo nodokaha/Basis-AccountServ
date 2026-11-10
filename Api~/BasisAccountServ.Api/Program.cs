@@ -11,6 +11,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("Set ConnectionStrings__AccountServ or ACCOUNTSERV_DATABASE_URL.");
 
 var didIssuer = builder.Configuration["DID_PROOF_ISSUER"]?.TrimEnd('/');
+if (!string.IsNullOrWhiteSpace(didIssuer) &&
+    (!Uri.TryCreate(didIssuer, UriKind.Absolute, out var issuerUri) ||
+     issuerUri.Scheme != Uri.UriSchemeHttps ||
+     !string.IsNullOrEmpty(issuerUri.Query) ||
+     !string.IsNullOrEmpty(issuerUri.Fragment)))
+{
+    throw new InvalidOperationException("DID_PROOF_ISSUER must be a canonical HTTPS URL without query or fragment.");
+}
 var dataSource = NpgsqlDataSource.Create(connectionString);
 builder.Services.AddSingleton(dataSource);
 var app = builder.Build();
@@ -121,10 +129,11 @@ app.MapPost("/api/did/link/challenges/{challengeId:guid}/complete", async (
     byte[] payload;
     DateTime expiresAt;
     await using (var select = new NpgsqlCommand("""
-        SELECT did, signed_payload, expires_at, consumed_at
-        FROM basis_did_link_challenges
-        WHERE challenge_id = @challenge_id AND account_id = @account_id
-        FOR UPDATE
+        SELECT c.did, c.signed_payload, c.expires_at, c.consumed_at
+        FROM basis_did_link_challenges c
+        INNER JOIN accounts a ON a.account_id = c.account_id AND a.disabled_at IS NULL
+        WHERE c.challenge_id = @challenge_id AND c.account_id = @account_id
+        FOR UPDATE OF c
         """, connection, transaction))
     {
         select.Parameters.AddWithValue("challenge_id", challengeId);
