@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS account_basis_links (
     FOREIGN KEY (account_id, basis_did)
         REFERENCES account_did_keys (account_id, did)
         ON DELETE CASCADE
-);CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
+);
+CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
     challenge_id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     did VARCHAR(128) NOT NULL CHECK (did LIKE 'did:key:z%'),
