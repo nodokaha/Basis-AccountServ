@@ -117,7 +117,21 @@ jobs:
           ]
           for statement in required:
               assert statement in schema, f"Missing schema object: {statement}"
-          assert "UNIQUE (server_id, basis_uuid)" in schema
+          assert "UNIQUE (server_id, basis_did)" in schema
+          assert "CREATE TABLE IF NOT EXISTS account_did_keys" in schema
+          assert "CREATE TABLE IF NOT EXISTS basis_did_link_challenges" in schema
+          assert "signed_payload BYTEA NOT NULL" in schema
           assert "CHECK (role IN ('user', 'moderator', 'admin'))" in schema
           print("Central identity schema contains the expected server-scoped entities.")
           PY
+
+  central-api-tests:
+    name: Test Basis DID proof verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Run central API tests
+        run: dotnet test Api~/BasisAccountServ.Api.Tests/BasisAccountServ.Api.Tests.csproj --configuration Release
