@@ -43,7 +43,7 @@ BEGIN
             REFERENCES account_did_keys (account_id, did)
             ON DELETE CASCADE;
     END IF;
-END
+END;
 $;
 CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
     challenge_id UUID PRIMARY KEY,
