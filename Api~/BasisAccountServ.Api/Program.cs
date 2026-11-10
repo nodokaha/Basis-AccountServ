@@ -55,9 +55,10 @@ app.MapPost("/api/did/link/challenges", async (
         return Results.BadRequest(new { error = "invalid_did_key" });
 
     await using var connection = await database.OpenConnectionAsync(cancellationToken);
+    await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
     await using (var accountCommand = new NpgsqlCommand(
-        "SELECT 1 FROM accounts WHERE account_id = @account_id AND disabled_at IS NULL",
-        connection))
+        "SELECT 1 FROM accounts WHERE account_id = @account_id AND disabled_at IS NULL FOR UPDATE",
+        connection, transaction))
     {
         accountCommand.Parameters.AddWithValue("account_id", accountId);
         if (await accountCommand.ExecuteScalarAsync(cancellationToken) is null)
@@ -66,12 +67,32 @@ app.MapPost("/api/did/link/challenges", async (
 
     await using (var existingCommand = new NpgsqlCommand(
         "SELECT account_id FROM account_did_keys WHERE did = @did",
-        connection))
+        connection, transaction))
     {
         existingCommand.Parameters.AddWithValue("did", request.Did);
         var existing = await existingCommand.ExecuteScalarAsync(cancellationToken);
         if (existing is not null)
             return Results.Conflict(new { error = "did_already_linked" });
+    }
+
+    await using (var cleanup = new NpgsqlCommand("""
+        DELETE FROM basis_did_link_challenges
+        WHERE expires_at <= NOW()
+           OR (consumed_at IS NOT NULL AND created_at < NOW() - INTERVAL '1 day')
+        """, connection, transaction))
+    {
+        await cleanup.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    await using (var active = new NpgsqlCommand("""
+        SELECT COUNT(*) FROM basis_did_link_challenges
+        WHERE account_id = @account_id AND consumed_at IS NULL AND expires_at > NOW()
+        """, connection, transaction))
+    {
+        active.Parameters.AddWithValue("account_id", accountId);
+        var activeCount = (long)(await active.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        if (activeCount >= 5)
+            return Results.StatusCode(StatusCodes.Status429TooManyRequests);
     }
 
     var challengeId = Guid.NewGuid();
@@ -85,7 +106,7 @@ app.MapPost("/api/did/link/challenges", async (
             (challenge_id, account_id, did, nonce_hash, verifier_context, signed_payload, expires_at)
         VALUES
             (@challenge_id, @account_id, @did, @nonce_hash, @verifier_context, @signed_payload, @expires_at)
-        """, connection);
+        """, connection, transaction);
     insert.Parameters.AddWithValue("challenge_id", challengeId);
     insert.Parameters.AddWithValue("account_id", accountId);
     insert.Parameters.AddWithValue("did", request.Did);
@@ -94,6 +115,7 @@ app.MapPost("/api/did/link/challenges", async (
     insert.Parameters.AddWithValue("signed_payload", payload);
     insert.Parameters.AddWithValue("expires_at", expiresAt);
     await insert.ExecuteNonQueryAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
 
     return Results.Ok(new
     {
