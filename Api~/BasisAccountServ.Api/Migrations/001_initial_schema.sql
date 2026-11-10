@@ -31,11 +31,20 @@ CREATE TABLE IF NOT EXISTS account_did_keys (
     PRIMARY KEY (account_id, did),
     UNIQUE (did)
 );
-ALTER TABLE account_basis_links
-    ADD CONSTRAINT fk_account_basis_links_verified_did
-    FOREIGN KEY (account_id, basis_did)
-    REFERENCES account_did_keys (account_id, did)
-    ON DELETE CASCADE;
+DO $
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_account_basis_links_verified_did'
+    ) THEN
+        ALTER TABLE account_basis_links
+            ADD CONSTRAINT fk_account_basis_links_verified_did
+            FOREIGN KEY (account_id, basis_did)
+            REFERENCES account_did_keys (account_id, did)
+            ON DELETE CASCADE;
+    END IF;
+END
+$;
 CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
     challenge_id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
