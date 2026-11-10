@@ -12,12 +12,16 @@ API container, a PostgreSQL-backed identity/server-role schema, liveness and
 database-readiness endpoints, and a Compose deployment with private persistent
 database storage.
 
-This milestone deliberately does NOT expose registration, password login,
-token issuance, or administrative endpoints. Those endpoints must be added
-together with the complete OIDC Authorization Code + PKCE flow, strict redirect
-URI validation, one-time authorization-code consumption, token hashing,
-signing-key management, and client authentication. Do not expose this service
-as a public authentication provider until that work is complete.
+The API now contains the Basis DID proof-of-possession endpoints described
+below. They accept only an already-authenticated account principal with a GUID
+`sub` (or NameIdentifier) claim. This API milestone does not yet configure the
+account login/OIDC authentication handler, so the endpoints fail closed with
+401 until that authentication layer is integrated. Registration, password
+login, token issuance, and public administrative endpoints are not enabled.
+Do not expose this service as a public authentication provider until the full
+OIDC Authorization Code + PKCE flow, strict redirect URI validation, one-time
+authorization-code consumption, token hashing, signing-key management, and
+client authentication are complete.
 
 ## Identity model
 
@@ -70,13 +74,42 @@ OIDC and API authentication are implemented; keep the database private.
 
 Basis's native DID authentication uses a random challenge (256-bit nonce) and
 verifies the response signature against the public key resolved from the
-challenge identity. The implementation also supports a context-bound signed
-payload overload; central linking must use that form rather than signing a bare
-nonce, binding at least the verifier/service, account, DID, purpose, and
-challenge identifier. Challenges are stored hashed, expire quickly, and are
-consumed atomically exactly once. Never store private keys or ask clients to
-upload them. A successful OIDC login alone does not prove control of a Basis
-DID; account linking requires this separate signature proof.
+challenge identity. The API uses NSec/libsodium for Ed25519 verification and
+decodes the same `did:key` Ed25519 multicodec + base58-btc representation as
+Basis. Unsupported key types, malformed encodings, and signatures not exactly
+64 bytes are rejected.
+
+The link payload is a binary, length-prefixed sequence containing the purpose
+(`accountserv:did-link:v1`), configured issuer, account ID, DID, challenge ID,
+expiry, and random nonce. Clients must sign the exact decoded payload bytes
+returned by the challenge endpoint; they must not reconstruct a JSON string or
+sign only the nonce. This binds the proof to the verifier, account, identity,
+operation, and expiry and prevents cross-service replay.
+
+### DID linking API
+
+Both endpoints require an authenticated principal whose `sub` (or
+NameIdentifier) is the AccountServ account UUID. The login/OIDC authentication
+handler is not yet wired in this milestone, so requests currently fail closed
+with 401 until that layer is connected.
+
+1. `POST /api/did/link/challenges` with JSON `{"did":"did:key:z..."}`.
+   The response contains `challengeId`, `did`, a Base64URL `payload`, and
+   `expiresAt`. Challenges expire after five minutes.
+2. Decode `payload` from Base64URL and sign those exact bytes with the
+   matching Basis Ed25519 private key. Submit
+   `POST /api/did/link/challenges/{challengeId}/complete` with JSON
+   `{"signature":"<base64url-signature>"}`.
+3. On success the DID is inserted into `account_did_keys`. A DID can belong
+   to only one global account. Failed signature attempts consume the challenge;
+   challenge completion is serialized in a database transaction to prevent
+   concurrent replay.
+
+Set `DID_PROOF_ISSUER` to the canonical public HTTPS issuer URL before enabling
+the account authentication layer. The issuer is included in the signed payload.
+Never store private keys or ask clients to upload them. A successful OIDC login
+alone does not prove control of a Basis DID; account linking requires this
+separate signature proof.
 
 The existing Basis plugin-message authentication flow remains separate during
 the migration. It continues to derive the caller UUID from the authenticated
