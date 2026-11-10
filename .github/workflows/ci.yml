@@ -84,3 +84,40 @@ jobs:
         run: |
           dotnet build "Basis Server/BasisNetworkServer/BasisNetworkServer.csproj" \
             --configuration Release
+
+  central-api-build:
+    name: Build central authentication API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore and build API
+        working-directory: Api~/BasisAccountServ.Api
+        run: dotnet build BasisAccountServ.Api.csproj --configuration Release
+
+      - name: Validate central identity schema
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          schema = Path("Api~/BasisAccountServ.Api/Migrations/001_initial_schema.sql").read_text()
+          required = [
+              "CREATE TABLE IF NOT EXISTS accounts",
+              "CREATE TABLE IF NOT EXISTS basis_servers",
+              "CREATE TABLE IF NOT EXISTS account_basis_links",
+              "CREATE TABLE IF NOT EXISTS server_roles",
+              "CREATE TABLE IF NOT EXISTS oauth_clients",
+              "CREATE TABLE IF NOT EXISTS oauth_authorization_codes",
+              "CREATE TABLE IF NOT EXISTS oauth_refresh_tokens",
+          ]
+          for statement in required:
+              assert statement in schema, f"Missing schema object: {statement}"
+          assert "UNIQUE (server_id, basis_uuid)" in schema
+          assert "CHECK (role IN ('user', 'moderator', 'admin'))" in schema
+          print("Central identity schema contains the expected server-scoped entities.")
+          PY
