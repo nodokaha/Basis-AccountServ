@@ -176,8 +176,6 @@ identity service. See [Central authentication architecture](docs/central-auth.md
 for the API service, PostgreSQL identity schema, server-scoped role model, and
 deployment boundary.
 
-The central API foundation is not yet a public login provider: OIDC endpoints,
-account registration/login, and dashboard visitor sessions are intentionally
-not exposed until the complete Authorization Code + PKCE flow is implemented.
+The central API foundation includes an Ed25519 DID proof-of-possession linking flow, but its authenticated-account middleware and OIDC endpoints are not yet enabled. Account registration/login and dashboard visitor sessions remain unavailable until the complete Authorization Code + PKCE flow is implemented.
 The existing Basis plugin-message flow remains operational and ordinary chat
 handling is unchanged.
