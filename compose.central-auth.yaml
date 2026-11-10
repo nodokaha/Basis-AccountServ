@@ -1,0 +1,31 @@
+services:
+  accountserv-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: accountserv
+      POSTGRES_USER: accountserv
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - accountserv-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accountserv -d accountserv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  accountserv-api:
+    build:
+      context: ./Api~/BasisAccountServ.Api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__AccountServ: Host=accountserv-db;Port=5432;Database=accountserv;Username=accountserv;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+      DID_PROOF_ISSUER: ${DID_PROOF_ISSUER:?Set DID_PROOF_ISSUER to the canonical HTTPS issuer URL}
+    depends_on:
+      accountserv-db:
+        condition: service_healthy
+    expose:
+      - "8080"
+volumes:
+  accountserv-postgres:
