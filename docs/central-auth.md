@@ -94,6 +94,17 @@ NameIdentifier) is the AccountServ account UUID. The login/OIDC authentication
 handler is not yet wired in this milestone, so requests currently fail closed
 with 401 until that layer is connected.
 
+The current Basis client helper `BasisDIDAuthIdentityClient.RespondToChallenge`
+signs the Basis network-login transcript, which is bound to a live connection.
+It does not currently expose a generic arbitrary-payload signing method for
+AccountServ's web linking flow. The API verifier is implemented and tested, but
+end-to-end in-game linking still needs either a narrowly scoped public
+`SignPayload` helper in the Basis client (using the existing local DID key),
+or a server-attestation flow that forwards the DID of an already-authenticated
+Basis peer over an authenticated server-to-server channel. Do not try to reuse
+the network-login transcript as an HTTP proof without the corresponding
+connection context.
+
 1. `POST /api/did/link/challenges` with JSON `{"did":"did:key:z..."}`.
    The response contains `challengeId`, `did`, a Base64URL `payload`, and
    `expiresAt`. Challenges expire after five minutes.
