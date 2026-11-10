@@ -80,9 +80,9 @@ decodes the same `did:key` Ed25519 multicodec + base58-btc representation as
 Basis. Unsupported key types, malformed encodings, and signatures not exactly
 64 bytes are rejected.
 
-The link payload is a binary, length-prefixed sequence containing the purpose
+The link payload is a binary, length-prefixed sequence (each length is a signed 32-bit little-endian integer) containing the purpose
 (`accountserv:did-link:v1`), configured issuer, account ID, DID, challenge ID,
-expiry, and random nonce. Clients must sign the exact decoded payload bytes
+expiry (Unix seconds encoded as invariant UTF-8 decimal text), and random nonce (32 raw bytes preceded by its 32-bit little-endian length). Text fields are UTF-8 with 32-bit little-endian byte lengths. Clients must sign the exact decoded payload bytes
 returned by the challenge endpoint; they must not reconstruct a JSON string or
 sign only the nonce. This binds the proof to the verifier, account, identity,
 operation, and expiry and prevents cross-service replay.
