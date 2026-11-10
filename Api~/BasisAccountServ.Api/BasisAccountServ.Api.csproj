@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.0" />
+    <PackageReference Include="NSec.Cryptography" Version="26.4.0" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Migrations/*.sql" CopyToOutputDirectory="PreserveNewest" />
