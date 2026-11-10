@@ -14,14 +14,6 @@ CREATE TABLE IF NOT EXISTS basis_servers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     disabled_at TIMESTAMPTZ NULL
 );
-CREATE TABLE IF NOT EXISTS account_basis_links (
-    account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
-    server_id UUID NOT NULL REFERENCES basis_servers(server_id) ON DELETE CASCADE,
-    basis_did VARCHAR(128) NOT NULL CHECK (basis_did LIKE 'did:key:z%'),
-    linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (account_id, server_id),
-    UNIQUE (server_id, basis_did)
-);
 -- A DID is a cryptographic identity derived from an Ed25519 public key.
 -- It is globally linked to an AccountServ account only after proof of possession.
 CREATE TABLE IF NOT EXISTS account_did_keys (
@@ -31,21 +23,17 @@ CREATE TABLE IF NOT EXISTS account_did_keys (
     PRIMARY KEY (account_id, did),
     UNIQUE (did)
 );
-DO $
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'fk_account_basis_links_verified_did'
-    ) THEN
-        ALTER TABLE account_basis_links
-            ADD CONSTRAINT fk_account_basis_links_verified_did
-            FOREIGN KEY (account_id, basis_did)
-            REFERENCES account_did_keys (account_id, did)
-            ON DELETE CASCADE;
-    END IF;
-END;
-$;
-CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
+CREATE TABLE IF NOT EXISTS account_basis_links (
+    account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+    server_id UUID NOT NULL REFERENCES basis_servers(server_id) ON DELETE CASCADE,
+    basis_did VARCHAR(128) NOT NULL CHECK (basis_did LIKE 'did:key:z%'),
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (account_id, server_id),
+    UNIQUE (server_id, basis_did),
+    FOREIGN KEY (account_id, basis_did)
+        REFERENCES account_did_keys (account_id, did)
+        ON DELETE CASCADE
+);CREATE TABLE IF NOT EXISTS basis_did_link_challenges (
     challenge_id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     did VARCHAR(128) NOT NULL CHECK (did LIKE 'did:key:z%'),
