@@ -8,7 +8,7 @@ namespace BasisAccountServ
     /// </summary>
     internal static class AccountServSettingsTab
     {
-        internal const string TabKey = "accountserv.settings.tab";
+        internal const string TabKey = "AccountServ";
 
         internal static void Register()
         {
