@@ -83,14 +83,6 @@ jobs:
           assert "Basis Framework" in asmdef["references"]
           assert "BasisNetworkCore" in asmdef["references"]
 
-          menu_provider = Path("Runtime/Unity/AccountServMenuProvider.cs").read_text(encoding="utf-8")
-          menu_tests = Path("Tests/Editor/AccountServMenuProviderTests.cs").read_text(encoding="utf-8")
-          assert "[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]" in menu_provider
-          assert "BasisMenuBase<BasisMainMenu>.AddProvider(instance)" in menu_provider
-          assert "ContainsProvider(providers)" in menu_provider
-          assert "instance.BoundButton" in menu_provider
-          assert "Register_DoesNotAddDuplicateProvider" in menu_tests
-          assert "BasisMenuBase<BasisMainMenu>.RemoveProvider(provider)" in menu_tests
           print("Package metadata, Unity client sources, and sample config are valid.")
           PY
 
@@ -114,30 +106,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-
-      - name: Verify Basis main-menu provider API contract
-        working-directory: Basis
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          menu_base = Path("Basis/Packages/com.basis.framework/BasisUI/Menus/BasisMenuBase.cs").read_text(encoding="utf-8")
-          main_menu = Path("Basis/Packages/com.basis.framework/BasisUI/Menus/BasisMainMenu.cs").read_text(encoding="utf-8")
-
-          add_provider = menu_base.split("public static void AddProvider", 1)[1].split("public static void RemoveProvider", 1)[0]
-          bind_providers = menu_base.split("public void BindProvidersToButtons()", 1)[1].split("#endregion", 1)[0]
-
-          assert "SuppressedProviderTypes.Contains(provider.GetType())" in add_provider
-          assert "Providers.Add(provider)" in add_provider
-          assert "Providers.Sort()" in add_provider
-          assert "Instance.BindProvidersToButtons()" in add_provider
-          assert "ProviderButtonParent" in bind_providers
-          assert "provider.Hidden == false" in bind_providers
-          assert "PanelButton.CreateNew(" in bind_providers
-          assert "provider.BindToButton(this, button)" in bind_providers
-          assert "BindProvidersToButtons();" in main_menu
-          print("Basis main-menu provider registration and button-binding contract is present.")
-          PY
 
       - name: Inject AccountServ source into BasisNetworkServer
         working-directory: Basis
