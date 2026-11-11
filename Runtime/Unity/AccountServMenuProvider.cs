@@ -1,5 +1,6 @@
 using Basis.BasisUI;
 using Basis.Scripts.Drivers;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace BasisAccountServ
@@ -10,7 +11,19 @@ namespace BasisAccountServ
     public sealed class AccountServMenuProvider : BasisMenuActionProvider<BasisMainMenu>
     {
         private static bool IsRegistered =>
-            BasisMenuBase<BasisMainMenu>.Providers.Exists(provider => provider is AccountServMenuProvider);
+            ContainsProvider(BasisMenuBase<BasisMainMenu>.Providers);
+
+        internal static bool ContainsProvider(
+            IEnumerable<BasisMenuActionProvider<BasisMainMenu>> providers)
+        {
+            foreach (BasisMenuActionProvider<BasisMainMenu> provider in providers)
+            {
+                if (provider is AccountServMenuProvider)
+                    return true;
+            }
+
+            return false;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void InstallRegistrationGuard()
