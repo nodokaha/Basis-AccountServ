@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace BasisAccountServ
 {
@@ -72,7 +73,10 @@ namespace BasisAccountServ
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F8))
+            // Basis projects use the Input System package only; the legacy UnityEngine.Input
+            // class throws InvalidOperationException there, every frame.
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.f8Key.wasPressedThisFrame)
                 visible = !visible;
         }
 

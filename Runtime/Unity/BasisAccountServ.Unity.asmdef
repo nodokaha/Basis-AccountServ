@@ -3,7 +3,8 @@
   "rootNamespace": "BasisAccountServ",
   "references": [
     "Basis Framework",
-    "BasisNetworkCore"
+    "BasisNetworkCore",
+    "Unity.InputSystem"
   ],
   "autoReferenced": true
 }

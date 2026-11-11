@@ -79,6 +79,42 @@ namespace BasisAccountServ.Tests
         }
 
         [Test]
+        public void EnsureRegistered_AddsProviderOnce_WhenCalledRepeatedly()
+        {
+            AccountServMenuProvider.EnsureRegistered("test-1");
+            AccountServMenuProvider.EnsureRegistered("test-2");
+            AccountServMenuProvider.EnsureRegistered("test-3");
+            int count = BasisMenuBase<BasisMainMenu>.Providers.FindAll(
+                provider => provider is AccountServMenuProvider).Count;
+            Assert.That(count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void FindProvider_ReturnsRegisteredProvider_AndNullWhenAbsent()
+        {
+            var empty = new List<BasisMenuActionProvider<BasisMainMenu>>();
+            Assert.That(AccountServMenuProvider.FindProvider(empty), Is.Null);
+            AccountServMenuProvider.Register();
+            Assert.That(AccountServMenuProvider.FindProvider(BasisMenuBase<BasisMainMenu>.Providers), Is.Not.Null);
+        }
+
+        [Test]
+        public void HasBoundButton_ReturnsFalse_WhenMenuOrProviderIsMissing()
+        {
+            Assert.That(AccountServMenuProvider.HasBoundButton(null, null), Is.False);
+            Assert.That(AccountServMenuProvider.HasBoundButton(null, new AccountServMenuProvider()), Is.False);
+        }
+
+        [Test]
+        public void Register_ReAddsProvider_AfterItWasRemovedFromTheSharedList()
+        {
+            AccountServMenuProvider.Register();
+            ResetProviderState();
+            AccountServMenuProvider.Register();
+            Assert.That(AccountServMenuProvider.ContainsProvider(BasisMenuBase<BasisMainMenu>.Providers), Is.True);
+        }
+
+        [Test]
         public void Provider_UsesVisibleMenuEntryWithConfiguredIconAndOrder()
         {
             var provider = new AccountServMenuProvider();
