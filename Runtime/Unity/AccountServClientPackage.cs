@@ -39,6 +39,11 @@ namespace BasisAccountServ
             BasisClientMessageRegistry.RegisterClientPlugin(
                 AccountServClientProtocol.MessageName,
                 HandleServerMessage);
+
+            // Register the menu provider from the same client startup entry point.
+            // This avoids relying on a separate RuntimeInitializeOnLoadMethod callback
+            // being discovered for an otherwise unreferenced provider type.
+            AccountServMenuProvider.Register();
         }
 
         private static readonly object PendingIdentifyLock = new object();
