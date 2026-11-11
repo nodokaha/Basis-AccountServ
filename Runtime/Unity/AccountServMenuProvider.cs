@@ -47,7 +47,7 @@ namespace BasisAccountServ
     /// Owns the controls and response subscription for one realized Settings tab.
     /// The component is destroyed with its page, so the response event cannot retain stale UI.
     /// </summary>
-    internal sealed class AccountServSettingsTabLifetime : MonoBehaviour
+    public sealed class AccountServSettingsTabLifetime : MonoBehaviour
     {
         private PanelElementDescriptor feedback;
         private PanelTextField accountNameField;
