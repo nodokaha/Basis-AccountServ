@@ -117,7 +117,7 @@ Start the server with AccountServ enabled, launch the Unity client with the pack
 
 If the tab does not appear, inspect Unity Console errors from `BasisAccountServ.Unity` and confirm that the package compiled against the installed Basis Framework version.
 
-Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity menu entry).
+Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity Settings tab).
 
 ## Using the panel
 
@@ -189,7 +189,7 @@ The current GitHub Actions workflow does **not** compile the Unity client assemb
 Its checks are split as follows:
 
 - **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
-- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for registration into `SettingsProvider.ExternalTabs` and duplicate prevention. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
+- **Unity client tests:** `Tests/Editor/AccountServSettingsTabTests.cs` contains EditMode tests for registration into `SettingsProvider.ExternalTabs` and duplicate prevention. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
