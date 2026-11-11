@@ -17,7 +17,7 @@ AccountServ uses a dedicated private client-to-server plugin-message route. It d
 - One-time challenge-response authentication; the password itself is never sent over the network
 - Failed-login lockout and expiring sessions
 - Assign `admin`, `moderator`, or `none` roles through Basis' existing permission groups
-- Native Basis UI account page with Account, Session, and Operator tabs, opened from the **Basis main-menu Account button** or with **F8**
+- Native **Basis Settings > AccountServ** tab for account registration, authentication, session management, and operator role management; **F8** opens the same Settings tab
 - Ordinary public chat remains unchanged
 
 ## Requirements
@@ -109,7 +109,7 @@ You can also use Unity Package Manager's **Add package from Git URL** and enter:
 https://github.com/nodokaha/Basis-AccountServ.git
 ```
 
-The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the main-menu `Account` provider are initialized before and after scene load. The provider opens a native `BasisMenuPanel` using Basis' standard panel components; AccountServ no longer creates an IMGUI window or maintains a separate UI lifecycle. Provider registration is idempotent, and the hotkey can invoke the provider directly even when the hotbar entry is unavailable. It is not part of the server module installed by basispm.
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the Settings tab extension are initialized before and after scene load. AccountServ registers through Basis' public `SettingsProvider.ExternalTabs` extension point and builds its controls with native Basis panel components. It does not add a separate main-menu provider button or create an IMGUI window. It is not part of the server module installed by basispm.
 
 ### 4. Open the panel
 
@@ -189,7 +189,7 @@ The current GitHub Actions workflow does **not** compile the Unity client assemb
 Its checks are split as follows:
 
 - **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
-- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for provider detection, registration into `BasisMenuBase<BasisMainMenu>.Providers`, duplicate prevention, re-registration after the shared list was reset, idempotent startup registration, and the provider's visibility, title, icon, and ordering. The test setup and cleanup use Basis' `RemoveProvider` API so an existing menu is rebound consistently. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
+- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for registration into `SettingsProvider.ExternalTabs` and duplicate prevention. The test setup and cleanup use Basis' `RemoveProvider` API so an existing menu is rebound consistently. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
