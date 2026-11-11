@@ -115,6 +115,8 @@ The Unity integration is provided as the separate `BasisAccountServ.Unity` assem
 
 Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** as a shortcut, to open the AccountServ panel.
 
+If **Account** does not appear, check the Unity Console for an `[AccountServ]` registration message. The client keeps the provider registered across Basis menu-provider initialization. If no registration message appears, confirm that the `BasisAccountServ.Unity` assembly compiled and that the package is present in the client project (installing the server module alone does not add the Unity menu entry).
+
 ## Using the panel
 
 | Panel action | Description |
