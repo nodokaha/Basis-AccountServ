@@ -36,6 +36,10 @@ namespace BasisAccountServ
         {
             Debug.Log("[AccountServ] Initializing Unity client integration.");
 
+            // Register the menu before initializing the optional network-message route.
+            // Menu availability must not depend on the plugin registry succeeding.
+            AccountServMenuProvider.Register();
+
             BasisClientMessageRegistry.RegisterClientPlugin(
                 AccountServClientProtocol.MessageName,
                 HandleServerMessage);
