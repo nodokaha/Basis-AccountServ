@@ -115,6 +115,8 @@ The Unity integration is provided as the separate `BasisAccountServ.Unity` assem
 
 Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** as a shortcut, to open the AccountServ panel.
 
+If **Account** does not appear, check the Unity Console for an `[AccountServ]` registration message. The client keeps the provider registered across Basis menu-provider initialization. If no registration message appears, confirm that the `BasisAccountServ.Unity` assembly compiled and that the package is present in the client project (installing the server module alone does not add the Unity menu entry).
+
 ## Using the panel
 
 | Panel action | Description |
@@ -183,7 +185,8 @@ These APIs are for trusted server-side code. Network clients must use the privat
 The current GitHub Actions workflow does **not** compile the Unity client assembly.
 Its checks are split as follows:
 
-- **Package metadata and configuration:** parses package/config JSON, checks required source files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
+- **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
+- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for Account provider detection, visibility, title, icon, and ordering. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
