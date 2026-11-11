@@ -4,7 +4,7 @@ using UnityEngine;
 namespace BasisAccountServ
 {
     /// <summary>
-    /// Small, independent AccountServ panel. F8 opens/closes it.
+    /// AccountServ panel. It can be opened from the Basis main menu or with F8.
     /// It uses the AccountServ plugin channel and never reads, consumes, or suppresses public chat.
     /// </summary>
     public sealed class BasisAccountServWindow : MonoBehaviour
@@ -43,10 +43,26 @@ namespace BasisAccountServ
             instance = host.AddComponent<BasisAccountServWindow>();
         }
 
+        /// <summary>
+        /// Opens the account panel from the Basis main menu or another client UI entry point.
+        /// </summary>
+        public static void Open()
+        {
+            if (instance == null)
+                Create();
+
+            if (instance == null)
+                return;
+
+            instance.visible = true;
+            if (AccountServClient.IsAvailable)
+                AccountServClient.GetStatus();
+        }
+
         private void OnEnable()
         {
             AccountServClient.ResponseReceived += OnResponse;
-            AddMessage("AccountServ ready. Press F8 to open this private panel.");
+            AddMessage("AccountServ ready. Open it from the Basis main menu or press F8.");
         }
 
         private void OnDisable()
