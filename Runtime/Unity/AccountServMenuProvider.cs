@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Basis.BasisUI;
 using Basis.Scripts.Drivers;
@@ -27,34 +26,59 @@ namespace BasisAccountServ
             return false;
         }
 
-        internal static bool RegisterIfMissing(
-            IEnumerable<BasisMenuActionProvider<BasisMainMenu>> providers,
-            Action register)
-        {
-            if (ContainsProvider(providers))
-                return false;
-
-            register?.Invoke();
-            return true;
-        }
-
         /// <summary>
         /// Register independently of AccountServClient initialization.
-        /// This follows the same Unity startup hook used by Basis' built-in menu providers.
+        /// Basis' AddProvider API rebinds the hotbar when the menu already exists.
         /// </summary>
-        [RuntimeInitializeOnLoadMethod]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         internal static void Register()
         {
-            if (instance == null)
-                instance = new AccountServMenuProvider();
+            List<BasisMenuActionProvider<BasisMainMenu>> providers =
+                BasisMenuBase<BasisMainMenu>.Providers;
 
-            bool registered = RegisterIfMissing(
-                BasisMenuBase<BasisMainMenu>.Providers,
-                () => BasisMenuBase<BasisMainMenu>.AddProvider(instance));
+            // Basis' AddProvider does not deduplicate providers, so guard by type first.
+            if (ContainsProvider(providers))
+            {
+                Debug.Log("[AccountServ] Main-menu provider already registered.");
+                return;
+            }
 
-            Debug.Log(registered
-                ? $"[AccountServ] Main-menu provider registered. Provider count: {BasisMenuBase<BasisMainMenu>.Providers.Count}."
-                : "[AccountServ] Main-menu provider was already registered.");
+            instance ??= new AccountServMenuProvider();
+            BasisMenuBase<BasisMainMenu>.AddProvider(instance);
+
+            // AddProvider can reject a provider type suppressed by Basis. Do not report
+            // success until the provider is actually present in the shared provider list.
+            if (!ContainsProvider(providers))
+            {
+                Debug.LogWarning(
+                    "[AccountServ] Main-menu provider registration was rejected. " +
+                    "Basis may have suppressed AccountServMenuProvider.");
+                return;
+            }
+
+            if (BasisMenuBase<BasisMainMenu>.Instance != null)
+            {
+                // AddProvider synchronously calls BindProvidersToButtons for an existing menu.
+                // A missing BoundButton at this point means the menu could not create the entry.
+                if (instance.BoundMenu != BasisMenuBase<BasisMainMenu>.Instance ||
+                    instance.BoundButton == null ||
+                    !BasisMenuBase<BasisMainMenu>.Instance.ProviderButtons.Contains(instance.BoundButton))
+                {
+                    Debug.LogWarning(
+                        "[AccountServ] Provider is registered, but its hotbar button was not created. " +
+                        "Check BasisMainMenu.ProviderButtonParent and PanelButton.CreateNew.");
+                    return;
+                }
+
+                Debug.Log("[AccountServ] Main-menu provider registered and hotbar button bound.");
+                return;
+            }
+
+            // The provider remains in the static list and BasisMainMenu binds it from
+            // its constructor when the main-menu instance is created.
+            Debug.Log(
+                "[AccountServ] Main-menu provider registered. " +
+                "The hotbar button will be created when BasisMainMenu is initialized.");
         }
 
         public override bool Hidden => false;

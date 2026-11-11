@@ -82,6 +82,7 @@ jobs:
           asmdef = json.loads(Path("Runtime/Unity/BasisAccountServ.Unity.asmdef").read_text())
           assert "Basis Framework" in asmdef["references"]
           assert "BasisNetworkCore" in asmdef["references"]
+
           print("Package metadata, Unity client sources, and sample config are valid.")
           PY
 

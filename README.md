@@ -109,13 +109,21 @@ You can also use Unity Package Manager's **Add package from Git URL** and enter:
 https://github.com/nodokaha/Basis-AccountServ.git
 ```
 
-The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore. Its client startup callback registers both the private plugin-message handler and the main-menu Account provider. It is not part of the server module installed by basispm.
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore. The private plugin-message handler is registered by the client startup callback before scene loading. The main-menu `Account` provider is registered independently with `RuntimeInitializeOnLoadMethod(AfterSceneLoad)`, matching Basis' built-in menu-provider lifecycle. This separation means menu registration does not depend on the private message registry being ready. It is not part of the server module installed by basispm.
 
 ### 4. Open the panel
 
 Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** as a shortcut, to open the AccountServ panel.
 
-If **Account** does not appear, check the Unity Console for `[AccountServ] Initializing Unity client integration.` and `[AccountServ] Main-menu provider registered.`. If these messages are absent, confirm that the `BasisAccountServ.Unity` assembly compiled and that the package is present in the client project (installing the server module alone does not add the Unity menu entry).
+If **Account** does not appear, use the Unity Console to distinguish registration from button creation:
+
+- No `[AccountServ] Main-menu provider ...` message: confirm that `BasisAccountServ.Unity` compiled, the package is imported, and the `AfterSceneLoad` callback is being discovered.
+- `[AccountServ] Main-menu provider registered. The hotbar button will be created when BasisMainMenu is initialized.`: the provider is registered before the menu instance exists; Basis creates the button when it constructs the main menu.
+- `[AccountServ] Main-menu provider registered and hotbar button bound.`: Basis has registered the provider and created its button. If it is still not visible, inspect the active menu UI and layout.
+- `[AccountServ] Provider is registered, but its hotbar button was not created.`: the provider list contains AccountServ, but Basis could not create the button. Check `BasisMainMenu.ProviderButtonParent`, `PanelButton.CreateNew`, and Unity Console errors.
+- `[AccountServ] Main-menu provider registration was rejected.`: Basis likely suppressed the provider type through `BasisMenuBase<BasisMainMenu>.SuppressProvider`.
+
+The client message-handler log `[AccountServ] Initializing Unity client integration.` is separate; its absence does not by itself explain a missing menu entry. Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity menu entry).
 
 ## Using the panel
 
@@ -186,7 +194,7 @@ The current GitHub Actions workflow does **not** compile the Unity client assemb
 Its checks are split as follows:
 
 - **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
-- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for provider detection, idempotent registration dispatch, visibility, title, icon, and ordering. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests.
+- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for provider detection, registration into `BasisMenuBase<BasisMainMenu>.Providers`, duplicate prevention, and the provider's visibility, title, icon, and ordering. The test setup and cleanup use Basis' `RemoveProvider` API so an existing menu is rebound consistently. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Basis.BasisUI;
 using NUnit.Framework;
@@ -10,19 +9,26 @@ namespace BasisAccountServ.Tests
         [SetUp]
         public void SetUp()
         {
-            RemoveAccountServProviders();
+            ResetProviderState();
         }
 
         [TearDown]
         public void TearDown()
         {
-            RemoveAccountServProviders();
+            ResetProviderState();
         }
 
-        private static void RemoveAccountServProviders()
+        private static void ResetProviderState()
         {
-            BasisMenuBase<BasisMainMenu>.Providers.RemoveAll(
-                provider => provider is AccountServMenuProvider);
+            BasisMenuBase<BasisMainMenu>.AllowProvider(typeof(AccountServMenuProvider));
+
+            // Use the public API so an already-created menu is rebound as well.
+            List<BasisMenuActionProvider<BasisMainMenu>> existing =
+                BasisMenuBase<BasisMainMenu>.Providers.FindAll(
+                    provider => provider is AccountServMenuProvider);
+
+            foreach (BasisMenuActionProvider<BasisMainMenu> provider in existing)
+                BasisMenuBase<BasisMainMenu>.RemoveProvider(provider);
         }
 
         [Test]
@@ -42,37 +48,6 @@ namespace BasisAccountServ.Tests
             };
 
             Assert.That(AccountServMenuProvider.ContainsProvider(providers), Is.True);
-        }
-
-        [Test]
-        public void RegisterIfMissing_InvokesRegistration_WhenProviderIsAbsent()
-        {
-            var providers = new List<BasisMenuActionProvider<BasisMainMenu>>();
-            int registrationCalls = 0;
-
-            bool registered = AccountServMenuProvider.RegisterIfMissing(
-                providers,
-                () => registrationCalls++);
-
-            Assert.That(registered, Is.True);
-            Assert.That(registrationCalls, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void RegisterIfMissing_DoesNotRegisterDuplicateProvider()
-        {
-            var providers = new List<BasisMenuActionProvider<BasisMainMenu>>
-            {
-                new AccountServMenuProvider()
-            };
-            int registrationCalls = 0;
-
-            bool registered = AccountServMenuProvider.RegisterIfMissing(
-                providers,
-                () => registrationCalls++);
-
-            Assert.That(registered, Is.False);
-            Assert.That(registrationCalls, Is.Zero);
         }
 
         [Test]
