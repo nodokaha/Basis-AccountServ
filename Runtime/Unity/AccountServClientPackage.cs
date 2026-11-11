@@ -38,9 +38,7 @@ namespace BasisAccountServ
             InitializeIntegration("BeforeSceneLoad");
         }
 
-        // Basis' own menu providers register after scene load. Repeating the (idempotent)
-        // registration here keeps the Account button available even if shared menu state
-        // is reset between the two callbacks.
+        // Register the Settings extension independently from the private message route.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InitializeAfterSceneLoad()
         {
@@ -49,9 +47,18 @@ namespace BasisAccountServ
 
         private static void InitializeIntegration(string phase)
         {
-            // The menu entry and the plugin-message route are independent: neither may
-            // prevent the other from being registered.
-            AccountServMenuProvider.EnsureRegistered(phase);
+            try
+            {
+                // SettingsProvider exposes external tabs for packages. Registration is
+                // idempotent and does not add another main-menu provider button.
+                AccountServSettingsTab.Register();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "[AccountServ] Unable to register the Settings tab during " + phase + ": " + exception.Message);
+                Debug.LogException(exception);
+            }
 
             try
             {
