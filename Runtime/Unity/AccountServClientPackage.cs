@@ -34,6 +34,9 @@ namespace BasisAccountServ
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize()
         {
+            Debug.Log("[AccountServ] Initializing Unity client integration.");
+            AccountServMenuProvider.Register();
+
             BasisClientMessageRegistry.RegisterClientPlugin(
                 AccountServClientProtocol.MessageName,
                 HandleServerMessage);

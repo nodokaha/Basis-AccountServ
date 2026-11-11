@@ -1,6 +1,8 @@
+using System;
+using System.Collections.Generic;
 using Basis.BasisUI;
 using Basis.Scripts.Drivers;
-using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace BasisAccountServ
@@ -8,10 +10,10 @@ namespace BasisAccountServ
     /// <summary>
     /// Adds an Account entry to the native Basis main-menu hotbar.
     /// </summary>
+    [AutoStaticsCleanup]
     public sealed class AccountServMenuProvider : BasisMenuActionProvider<BasisMainMenu>
     {
-        private static bool IsRegistered =>
-            ContainsProvider(BasisMenuBase<BasisMainMenu>.Providers);
+        private static AccountServMenuProvider instance;
 
         internal static bool ContainsProvider(
             IEnumerable<BasisMenuActionProvider<BasisMainMenu>> providers)
@@ -25,23 +27,33 @@ namespace BasisAccountServ
             return false;
         }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void InstallRegistrationGuard()
+        internal static bool RegisterIfMissing(
+            IEnumerable<BasisMenuActionProvider<BasisMainMenu>> providers,
+            Action register)
         {
-            // Basis providers are registered during startup too. Keep a small persistent
-            // guard so this provider is re-added if Basis recreates/clears its static list.
-            var host = new GameObject(nameof(AccountServMenuProviderRegistrationGuard));
-            Object.DontDestroyOnLoad(host);
-            host.AddComponent<AccountServMenuProviderRegistrationGuard>();
+            if (ContainsProvider(providers))
+                return false;
+
+            register?.Invoke();
+            return true;
         }
 
-        internal static void EnsureRegistered()
+        /// <summary>
+        /// Called by AccountServClient.Initialize so menu registration shares the
+        /// same guaranteed package startup path as the client message handler.
+        /// </summary>
+        internal static void Register()
         {
-            if (IsRegistered)
-                return;
+            if (instance == null)
+                instance = new AccountServMenuProvider();
 
-            BasisMenuBase<BasisMainMenu>.AddProvider(new AccountServMenuProvider());
-            Debug.Log($"[AccountServ] Registered main-menu provider. Provider count: {BasisMenuBase<BasisMainMenu>.Providers.Count}.");
+            bool registered = RegisterIfMissing(
+                BasisMenuBase<BasisMainMenu>.Providers,
+                () => BasisMenuBase<BasisMainMenu>.AddProvider(instance));
+
+            Debug.Log(registered
+                ? $"[AccountServ] Main-menu provider registered. Provider count: {BasisMenuBase<BasisMainMenu>.Providers.Count}."
+                : "[AccountServ] Main-menu provider was already registered.");
         }
 
         public override bool Hidden => false;
@@ -52,22 +64,6 @@ namespace BasisAccountServ
         public override void RunAction()
         {
             BasisAccountServWindow.Open();
-        }
-    }
-
-    /// <summary>
-    /// Ensures AccountServ remains registered after Basis initializes or resets its menu providers.
-    /// </summary>
-    internal sealed class AccountServMenuProviderRegistrationGuard : MonoBehaviour
-    {
-        private void Awake()
-        {
-            AccountServMenuProvider.EnsureRegistered();
-        }
-
-        private void Update()
-        {
-            AccountServMenuProvider.EnsureRegistered();
         }
     }
 }
