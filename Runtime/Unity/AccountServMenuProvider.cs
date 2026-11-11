@@ -110,8 +110,9 @@ namespace BasisAccountServ
             AccountServMenuProvider provider = FindProvider(BasisMenuBase<BasisMainMenu>.Providers);
             if (provider == null)
             {
-                Debug.LogWarning("[AccountServ] Cannot open the AccountServ page because the Basis provider is unavailable.");
-                return;
+                // The hotbar registration can be suppressed or fail independently. F8 still
+                // has a direct provider instance so the account page remains reachable.
+                provider = instance ??= new AccountServMenuProvider();
             }
 
             if (BasisMainMenu.ActivePanelProvider == provider)
