@@ -185,7 +185,8 @@ These APIs are for trusted server-side code. Network clients must use the privat
 The current GitHub Actions workflow does **not** compile the Unity client assembly.
 Its checks are split as follows:
 
-- **Package metadata and configuration:** parses package/config JSON, checks required source files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
+- **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
+- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for Account provider detection, visibility, title, icon, and ordering. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
