@@ -17,7 +17,7 @@ AccountServ uses a dedicated private client-to-server plugin-message route. It d
 - One-time challenge-response authentication; the password itself is never sent over the network
 - Failed-login lockout and expiring sessions
 - Assign `admin`, `moderator`, or `none` roles through Basis' existing permission groups
-- In-game Unity management panel opened with **F8**
+- In-game Unity management panel opened from the **Basis main-menu Account button** or with **F8**
 - Ordinary public chat remains unchanged
 
 ## Requirements
@@ -113,7 +113,7 @@ The Unity integration is provided as the separate `BasisAccountServ.Unity` assem
 
 ### 4. Open the panel
 
-Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Press **F8** to open the AccountServ panel.
+Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** as a shortcut, to open the AccountServ panel.
 
 ## Using the panel
 
@@ -174,7 +174,7 @@ These APIs are for trusted server-side code. Network clients must use the privat
 - The server derives the caller's UUID from the authenticated peer using Basis' network identity mapping; it does not trust a UUID supplied in the request.
 - Replies are sent only to the requesting peer and are not broadcast to other players.
 - Role changes are authorized server-side against Basis' existing `admin` permission group.
-- The F8 panel is a private client-to-server AccountServ interface, not player-to-player direct messaging.
+- The Basis main-menu **Account** button and F8 shortcut open the same private client-to-server AccountServ interface, not player-to-player direct messaging.
 - Ordinary `ChatChannel` handling is not modified, intercepted, observed, or suppressed.
 - The server and Unity client components are installed independently.
 
@@ -193,7 +193,7 @@ Therefore, a green CI run does not establish that `BasisAccountServ.Unity` compi
 Before production use, open a test project using the same Basis Framework and BasisNetworkCore version targeted by this package, add this repository through UPM, let Unity import and compile the package, and confirm the Console contains no C# compilation errors. Then validate the following in a compatible Unity Editor and a test Basis server:
 
 1. The Unity project imports `com.nodokaha.accountserv` without assembly or compilation errors.
-2. With AccountServ enabled on the server, the client can open the panel with F8.
+2. With AccountServ enabled on the server, the client can open the panel from the Basis main-menu Account button and with F8.
 3. Register creates an account associated with the connected Basis UUID.
 4. Identify succeeds for the matching account and Status reports the session.
 5. Logout clears the session; a subsequent Status reflects that state.

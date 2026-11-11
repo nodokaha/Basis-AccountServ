@@ -52,6 +52,7 @@ jobs:
               "Runtime/Unity/AccountServClientPackage.cs",
               "Runtime/Unity/BasisAccountServ.Unity.asmdef",
               "Runtime/Unity/BasisAccountServWindow.cs",
+              "Runtime/Unity/AccountServMenuProvider.cs",
               "Server~/BasisNetworkServer/AccountServPackage.cs",
               "Server~/BasisNetworkServer/AccountServMessageHandler.cs",
               "Server~/BasisNetworkServer/AccountServService.cs",
@@ -65,6 +66,7 @@ jobs:
               "Runtime/Unity/AccountServClientPackage.cs.meta",
               "Runtime/Unity/BasisAccountServ.Unity.asmdef.meta",
               "Runtime/Unity/BasisAccountServWindow.cs.meta",
+              "Runtime/Unity/AccountServMenuProvider.cs.meta",
           ]
           for name in unity_assets:
               assert Path(name).is_file(), f"Missing Unity metadata file: {name}"
