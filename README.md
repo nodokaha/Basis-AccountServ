@@ -17,7 +17,7 @@ AccountServ uses a dedicated private client-to-server plugin-message route. It d
 - One-time challenge-response authentication; the password itself is never sent over the network
 - Failed-login lockout and expiring sessions
 - Assign `admin`, `moderator`, or `none` roles through Basis' existing permission groups
-- Native Basis UI account page with Account, Session, and Operator tabs, opened from the **Basis main-menu Account button** or with **F8**
+- Native **Basis Settings > AccountServ** tab for account registration, authentication, session management, and operator role management; **F8** opens the same Settings tab
 - Ordinary public chat remains unchanged
 
 ## Requirements
@@ -109,21 +109,21 @@ You can also use Unity Package Manager's **Add package from Git URL** and enter:
 https://github.com/nodokaha/Basis-AccountServ.git
 ```
 
-The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the main-menu `Account` provider are initialized before and after scene load. The provider opens a native `BasisMenuPanel` using Basis' standard panel components; AccountServ no longer creates an IMGUI window or maintains a separate UI lifecycle. Provider registration is idempotent, and the hotkey can invoke the provider directly even when the hotbar entry is unavailable. It is not part of the server module installed by basispm.
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the Settings tab extension are initialized before and after scene load. AccountServ registers through Basis' public `SettingsProvider.ExternalTabs` extension point and builds its controls with native Basis panel components. It does not add a separate main-menu provider button or create an IMGUI window. It is not part of the server module installed by basispm.
 
 ### 4. Open the panel
 
-Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** to open or close the same native Basis Account page.
+Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu, select **Settings**, then select the **AccountServ** tab. Press **F8** to navigate directly to that same tab.
 
-If **Account** does not appear, press **F8** to open the Account page through the provider directly. If both entry points fail, inspect Unity Console errors from `BasisAccountServ.Unity` and confirm that the package compiled against the installed Basis Framework version.
+If the tab does not appear, inspect Unity Console errors from `BasisAccountServ.Unity` and confirm that the package compiled against the installed Basis Framework version.
 
-Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity menu entry).
+Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity Settings tab).
 
 ## Using the panel
 
-The AccountServ page uses the native Basis panel UI and is divided into three tabs:
+The AccountServ Settings tab uses native Basis panel controls and contains three sections:
 
-| Tab | Actions |
+| Section | Actions |
 |---|---|
 | Account | Register an account or identify an existing account bound to this Basis UUID |
 | Session | Check the current AccountServ session or log out |
@@ -178,8 +178,8 @@ These APIs are for trusted server-side code. Network clients must use the privat
 - The server derives the caller's UUID from the authenticated peer using Basis' network identity mapping; it does not trust a UUID supplied in the request.
 - Replies are sent only to the requesting peer and are not broadcast to other players.
 - Role changes are authorized server-side against Basis' existing `admin` permission group.
-- The Basis main-menu **Account** button and F8 shortcut open the same native `BasisMenuPanel` page and private client-to-server AccountServ interface, not player-to-player direct messaging.
-- AccountServ UI is built with Basis panel components; no separate IMGUI window is created.
+- The **Settings > AccountServ** tab and F8 shortcut open the same native Basis Settings page and private client-to-server AccountServ interface, not player-to-player direct messaging.
+- AccountServ registers through Basis' `SettingsProvider.ExternalTabs` extension point; no separate main-menu button or IMGUI window is created.
 - Ordinary `ChatChannel` handling is not modified, intercepted, observed, or suppressed.
 - The server and Unity client components are installed independently.
 
@@ -189,7 +189,7 @@ The current GitHub Actions workflow does **not** compile the Unity client assemb
 Its checks are split as follows:
 
 - **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
-- **Unity client tests:** `Tests/Editor/AccountServMenuProviderTests.cs` contains EditMode tests for provider detection, registration into `BasisMenuBase<BasisMainMenu>.Providers`, duplicate prevention, re-registration after the shared list was reset, idempotent startup registration, and the provider's visibility, title, icon, and ordering. The test setup and cleanup use Basis' `RemoveProvider` API so an existing menu is rebound consistently. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
+- **Unity client tests:** `Tests/Editor/AccountServSettingsTabTests.cs` contains EditMode tests for registration into `SettingsProvider.ExternalTabs` and duplicate prevention. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
@@ -199,7 +199,7 @@ Therefore, a green CI run does not establish that `BasisAccountServ.Unity` compi
 Before production use, open a test project using the same Basis Framework and BasisNetworkCore version targeted by this package, add this repository through UPM, let Unity import and compile the package, and confirm the Console contains no C# compilation errors. Then validate the following in a compatible Unity Editor and a test Basis server:
 
 1. The Unity project imports `com.nodokaha.accountserv` without assembly or compilation errors.
-2. With AccountServ enabled on the server, the client can open the panel from the Basis main-menu Account button and with F8.
+2. With AccountServ enabled on the server, the client can open **Settings > AccountServ** and navigate to the same tab with F8.
 3. Register creates an account associated with the connected Basis UUID.
 4. Identify succeeds for the matching account and Status reports the session.
 5. Logout clears the session; a subsequent Status reflects that state.

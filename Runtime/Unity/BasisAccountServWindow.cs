@@ -4,8 +4,8 @@ using UnityEngine.InputSystem;
 namespace BasisAccountServ
 {
     /// <summary>
-    /// Keyboard shortcut bridge for the native AccountServ Basis provider page.
-    /// This component deliberately owns no UI; BasisMainMenu owns the page lifecycle.
+    /// Keyboard shortcut bridge that opens AccountServ directly inside Basis Settings.
+    /// This component deliberately owns no UI; the SettingsProvider owns the page lifecycle.
     /// </summary>
     public sealed class BasisAccountServWindow : MonoBehaviour
     {
@@ -25,7 +25,7 @@ namespace BasisAccountServ
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.f8Key.wasPressedThisFrame)
-                AccountServMenuProvider.ToggleFromShortcut();
+                AccountServSettingsTab.OpenFromShortcut();
         }
     }
 }
