@@ -1,0 +1,15 @@
+{
+  "name": "BasisAccountServ.Unity.Tests",
+  "rootNamespace": "BasisAccountServ.Tests",
+  "references": [
+    "BasisAccountServ.Unity",
+    "Basis Framework"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}
