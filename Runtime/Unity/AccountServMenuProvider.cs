@@ -30,7 +30,6 @@ namespace BasisAccountServ
         /// Register independently of AccountServClient initialization.
         /// Basis' AddProvider API rebinds the hotbar when the menu already exists.
         /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         internal static void Register()
         {
             List<BasisMenuActionProvider<BasisMainMenu>> providers =
