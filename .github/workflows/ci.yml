@@ -35,6 +35,13 @@ jobs:
           assert config["security"]["maximumFailedLogins"] > 0
           assert config["security"]["lockoutSeconds"] > 0
 
+          menu_provider = Path("Runtime/Unity/AccountServMenuProvider.cs").read_text(encoding="utf-8")
+          assert "RuntimeInitializeLoadType.BeforeSceneLoad" in menu_provider
+          assert "EnsureRegistered()" in menu_provider
+          assert "Providers.Exists" in menu_provider
+          assert "AddressableAssets.Sprites.Avatars" in menu_provider
+          assert "AccountServMenuProviderRegistrationGuard" in menu_provider
+
           server_config = Path("Server~/BasisNetworkServer/AccountServPackage.cs").read_text(encoding="utf-8")
           environment_variables = [
               "ACCOUNTSERV_CONFIG_FILE",
