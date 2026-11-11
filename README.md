@@ -17,7 +17,7 @@ AccountServ uses a dedicated private client-to-server plugin-message route. It d
 - One-time challenge-response authentication; the password itself is never sent over the network
 - Failed-login lockout and expiring sessions
 - Assign `admin`, `moderator`, or `none` roles through Basis' existing permission groups
-- In-game Unity management panel opened from the **Basis main-menu Account button** or with **F8**
+- Native Basis UI account page with Account, Session, and Operator tabs, opened from the **Basis main-menu Account button** or with **F8**
 - Ordinary public chat remains unchanged
 
 ## Requirements
@@ -109,30 +109,24 @@ You can also use Unity Package Manager's **Add package from Git URL** and enter:
 https://github.com/nodokaha/Basis-AccountServ.git
 ```
 
-The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the main-menu `Account` provider are initialized from the client startup callbacks both before and after scene load. Both callbacks are idempotent: the provider is only added when it is missing, and Basis' other menu providers also register after scene load. In addition, every time the Basis main menu is opened AccountServ checks that its provider is registered and its hotbar button exists, and repairs the hotbar if not. It is not part of the server module installed by basispm.
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework, BasisNetworkCore and the Unity Input System package (Basis projects use the Input System package only, so the F8 shortcut is read through `Keyboard.current`, not the legacy `Input` class). The private plugin-message handler and the main-menu `Account` provider are initialized before and after scene load. The provider opens a native `BasisMenuPanel` using Basis' standard panel components; AccountServ no longer creates an IMGUI window or maintains a separate UI lifecycle. Provider registration is idempotent, and the hotkey can invoke the provider directly even when the hotbar entry is unavailable. It is not part of the server module installed by basispm.
 
 ### 4. Open the panel
 
-Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** as a shortcut, to open the AccountServ panel.
+Start the server with AccountServ enabled, launch the Unity client with the package installed, and connect to that server. Open the Basis main menu and select **Account**, or press **F8** to open or close the same native Basis Account page.
 
-If **Account** does not appear, use the Unity Console to distinguish registration from button creation:
-
-- No `[AccountServ] Initializing Unity client integration.` message: confirm that `BasisAccountServ.Unity` compiled and the package is imported. If that initialization message appears but the Account button is missing, inspect warnings and exceptions logged during client startup.
-- `[AccountServ] Main-menu registration failed during ...`: registering the provider threw an exception (the exception is logged right after). The plugin-message route is registered independently and is not affected.
-- `[AccountServ] Provider is registered, but its hotbar button was not created.`: the provider list contains AccountServ, but Basis could not create the button even after a rebind. Check `BasisMainMenu.ProviderButtonParent`, `PanelButton.CreateNew`, and Unity Console errors.
-- `[AccountServ] Main-menu provider registration was rejected.`: Basis likely suppressed the provider type through `BasisMenuBase<BasisMainMenu>.SuppressProvider`.
-- Repeated `InvalidOperationException ... Input System package` errors from `BasisAccountServWindow.Update`: an older package version read F8 through the legacy `Input` class. Update the package; current versions use the Input System package.
+If **Account** does not appear, press **F8** to open the Account page through the provider directly. If both entry points fail, inspect Unity Console errors from `BasisAccountServ.Unity` and confirm that the package compiled against the installed Basis Framework version.
 
 Also confirm that the package is installed in the client project (installing the server module alone does not add the Unity menu entry).
 
 ## Using the panel
 
-| Panel action | Description |
+The AccountServ page uses the native Basis panel UI and is divided into three tabs:
+
+| Tab | Actions |
 |---|---|
-| Register | Create an account for the authenticated Basis UUID and identify |
-| Identify | Authenticate an existing account bound to this Basis UUID |
-| Status | Check the current AccountServ session |
-| Logout | End the current AccountServ session |
+| Account | Register an account or identify an existing account bound to this Basis UUID |
+| Session | Check the current AccountServ session or log out |
 | Operator | Assign `admin`, `moderator`, or `none` to a target Basis UUID |
 
 The Operator action is accepted only when the requesting authenticated UUID is already in Basis' `admin` permission group. AccountServ does not bootstrap the first administrator. Configure the initial administrator through Basis' existing administrator/permission setup before using role management.
@@ -184,7 +178,8 @@ These APIs are for trusted server-side code. Network clients must use the privat
 - The server derives the caller's UUID from the authenticated peer using Basis' network identity mapping; it does not trust a UUID supplied in the request.
 - Replies are sent only to the requesting peer and are not broadcast to other players.
 - Role changes are authorized server-side against Basis' existing `admin` permission group.
-- The Basis main-menu **Account** button and F8 shortcut open the same private client-to-server AccountServ interface, not player-to-player direct messaging.
+- The Basis main-menu **Account** button and F8 shortcut open the same native `BasisMenuPanel` page and private client-to-server AccountServ interface, not player-to-player direct messaging.
+- AccountServ UI is built with Basis panel components; no separate IMGUI window is created.
 - Ordinary `ChatChannel` handling is not modified, intercepted, observed, or suppressed.
 - The server and Unity client components are installed independently.
 
