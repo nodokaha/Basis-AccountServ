@@ -36,14 +36,13 @@ namespace BasisAccountServ
         {
             Debug.Log("[AccountServ] Initializing Unity client integration.");
 
+            // Register the menu before initializing the optional network-message route.
+            // Menu availability must not depend on the plugin registry succeeding.
+            AccountServMenuProvider.Register();
+
             BasisClientMessageRegistry.RegisterClientPlugin(
                 AccountServClientProtocol.MessageName,
                 HandleServerMessage);
-
-            // Register the menu provider from the same client startup entry point.
-            // This avoids relying on a separate RuntimeInitializeOnLoadMethod callback
-            // being discovered for an otherwise unreferenced provider type.
-            AccountServMenuProvider.Register();
         }
 
         private static readonly object PendingIdentifyLock = new object();
