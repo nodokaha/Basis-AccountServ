@@ -35,14 +35,37 @@ namespace BasisAccountServ
         private static void Initialize()
         {
             Debug.Log("[AccountServ] Initializing Unity client integration.");
+            InitializeIntegration("BeforeSceneLoad");
+        }
 
-            // Register the menu before initializing the optional network-message route.
-            // Menu availability must not depend on the plugin registry succeeding.
-            AccountServMenuProvider.Register();
+        // Basis' own menu providers register after scene load. Repeating the (idempotent)
+        // registration here keeps the Account button available even if shared menu state
+        // is reset between the two callbacks.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InitializeAfterSceneLoad()
+        {
+            InitializeIntegration("AfterSceneLoad");
+        }
 
-            BasisClientMessageRegistry.RegisterClientPlugin(
-                AccountServClientProtocol.MessageName,
-                HandleServerMessage);
+        private static void InitializeIntegration(string phase)
+        {
+            // The menu entry and the plugin-message route are independent: neither may
+            // prevent the other from being registered.
+            AccountServMenuProvider.EnsureRegistered(phase);
+
+            try
+            {
+                // Registering by name is idempotent; the latest handler simply replaces the previous one.
+                BasisClientMessageRegistry.RegisterClientPlugin(
+                    AccountServClientProtocol.MessageName,
+                    HandleServerMessage);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "[AccountServ] Unable to register the plugin-message handler during " + phase + ": " + exception.Message);
+                Debug.LogException(exception);
+            }
         }
 
         private static readonly object PendingIdentifyLock = new object();
@@ -127,6 +150,20 @@ namespace BasisAccountServ
             NetPacketReader reader,
             byte channel,
             DeliveryMethod deliveryMethod)
+        {
+            // Basis hands ownership of the reader to plugin handlers, so it must always be
+            // returned to the pool, including on every early return below.
+            try
+            {
+                ProcessServerMessage(reader);
+            }
+            finally
+            {
+                reader.Recycle();
+            }
+        }
+
+        private static void ProcessServerMessage(NetPacketReader reader)
         {
             if (!reader.TryGetByte(out byte operation) ||
                 reader.AvailableBytes > AccountServClientProtocol.MaximumResponseBytes)
