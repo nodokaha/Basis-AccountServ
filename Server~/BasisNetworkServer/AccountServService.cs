@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
+using Basis.Network.Core;
 using BasisPermissions;
 
 namespace BasisAccountServ
@@ -17,6 +18,7 @@ namespace BasisAccountServ
     {
         private const int SaltSize = 16;
         private const int HashSize = 32;
+        private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
         private const int Pbkdf2Iterations = 210000;
         private static readonly object Gate = new object();
         private static readonly Dictionary<string, AccountRecord> Accounts =
@@ -97,7 +99,7 @@ namespace BasisAccountServ
                 using (RandomNumberGenerator random = RandomNumberGenerator.Create())
                     random.GetBytes(salt);
                 DeriveCredentialKeys(password, salt, out byte[] storedKey, out _);
-                Accounts.Add(key, new AccountRecord
+                if (!TryAddAccount_NoLock(key, new AccountRecord
                 {
                     Name = accountName.Trim(),
                     OwnerUuid = authenticatedUuid.Trim(),
@@ -105,8 +107,8 @@ namespace BasisAccountServ
                     PasswordHash = Convert.ToBase64String(storedKey),
                     CredentialVersion = 2,
                     CreatedUtc = DateTime.UtcNow
-                });
-                Save_NoLock();
+                }, out error))
+                    return false;
                 Sessions[authenticatedUuid.Trim()] = NewSession(accountName);
                 return true;
             }
@@ -158,7 +160,7 @@ namespace BasisAccountServ
                 string key = NormalizeName(accountName);
                 if (Accounts.ContainsKey(key)) { error = "Account name is already registered."; return false; }
 
-                Accounts.Add(key, new AccountRecord
+                if (!TryAddAccount_NoLock(key, new AccountRecord
                 {
                     Name = accountName.Trim(),
                     OwnerUuid = authenticatedUuid.Trim(),
@@ -166,8 +168,8 @@ namespace BasisAccountServ
                     PasswordHash = Convert.ToBase64String(verifier),
                     CredentialVersion = 2,
                     CreatedUtc = DateTime.UtcNow
-                });
-                Save_NoLock();
+                }, out error))
+                    return false;
                 Sessions[authenticatedUuid.Trim()] = NewSession(accountName);
                 return true;
             }
@@ -196,6 +198,7 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
+                PruneExpired_NoLock();
                 string uuid = authenticatedUuid.Trim();
                 if (IsLocked_NoLock(uuid))
                 {
@@ -338,12 +341,13 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (IsLocked_NoLock(authenticatedUuid.Trim())) { error = "Login temporarily locked. Try again later."; return false; }
+                string uuid = authenticatedUuid.Trim();
+                if (IsLocked_NoLock(uuid)) { error = "Login temporarily locked. Try again later."; return false; }
 
                 if (!Accounts.TryGetValue(NormalizeName(accountName), out AccountRecord account) ||
-                    !string.Equals(account.OwnerUuid, authenticatedUuid.Trim(), StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(account.OwnerUuid, uuid, StringComparison.OrdinalIgnoreCase))
                 {
-                    RecordFailure_NoLock(authenticatedUuid.Trim());
+                    RecordFailure_NoLock(uuid);
                     error = "Invalid account name or password.";
                     return false;
                 }
@@ -369,7 +373,7 @@ namespace BasisAccountServ
 
                 if (!CryptographicOperations.FixedTimeEquals(actual, expected))
                 {
-                    RecordFailure_NoLock(authenticatedUuid);
+                    RecordFailure_NoLock(uuid);
                     error = "Invalid account name or password.";
                     return false;
                 }
@@ -382,8 +386,8 @@ namespace BasisAccountServ
                     Save_NoLock();
                 }
 
-                Failures.Remove(authenticatedUuid);
-                Sessions[authenticatedUuid.Trim()] = NewSession(account.Name);
+                Failures.Remove(uuid);
+                Sessions[uuid] = NewSession(account.Name);
                 return true;
             }
         }
@@ -394,11 +398,12 @@ namespace BasisAccountServ
             lock (Gate)
             {
                 EnsureInitialized();
-                if (!Sessions.TryGetValue(authenticatedUuid.Trim(), out SessionRecord session))
+                string uuid = authenticatedUuid.Trim();
+                if (!Sessions.TryGetValue(uuid, out SessionRecord session))
                     return false;
                 if (session.ExpiresUtc <= DateTime.UtcNow)
                 {
-                    Sessions.Remove(authenticatedUuid);
+                    Sessions.Remove(uuid);
                     return false;
                 }
                 return true;
@@ -410,11 +415,12 @@ namespace BasisAccountServ
             if (!IsValidIdentity(authenticatedUuid)) return null;
             lock (Gate)
             {
-                if (!Sessions.TryGetValue(authenticatedUuid, out SessionRecord session))
+                string uuid = authenticatedUuid.Trim();
+                if (!Sessions.TryGetValue(uuid, out SessionRecord session))
                     return null;
                 if (session.ExpiresUtc <= DateTime.UtcNow)
                 {
-                    Sessions.Remove(authenticatedUuid);
+                    Sessions.Remove(uuid);
                     return null;
                 }
                 return session.AccountName;
@@ -530,6 +536,7 @@ namespace BasisAccountServ
         private static bool IsLocked_NoLock(string uuid)
         {
             if (!Failures.TryGetValue(uuid, out FailureRecord failure)) return false;
+            if (failure.LockedUntilUtc == default(DateTime)) return false;
             if (failure.LockedUntilUtc <= DateTime.UtcNow)
             {
                 Failures.Remove(uuid);
@@ -540,12 +547,56 @@ namespace BasisAccountServ
 
         private static void RecordFailure_NoLock(string uuid)
         {
-            if (!Failures.TryGetValue(uuid, out FailureRecord failure))
+            DateTime now = DateTime.UtcNow;
+            if (!Failures.TryGetValue(uuid, out FailureRecord failure) ||
+                (failure.LockedUntilUtc == default(DateTime) && now - failure.LastFailureUtc > FailureWindow))
                 failure = new FailureRecord();
             failure.Count++;
+            failure.LastFailureUtc = now;
             if (failure.Count >= _maximumFailedLogins)
-                failure.LockedUntilUtc = DateTime.UtcNow.AddSeconds(_lockoutSeconds);
+                failure.LockedUntilUtc = now.AddSeconds(_lockoutSeconds);
             Failures[uuid] = failure;
+        }
+
+        private static void PruneExpired_NoLock()
+        {
+            DateTime now = DateTime.UtcNow;
+            RemoveWhere(Sessions, session => session.ExpiresUtc <= now);
+            RemoveWhere(Challenges, challenge => challenge.ExpiresUtc <= now);
+            RemoveWhere(Failures, failure => failure.LockedUntilUtc == default(DateTime)
+                ? now - failure.LastFailureUtc > FailureWindow
+                : failure.LockedUntilUtc <= now);
+        }
+
+        private static void RemoveWhere<T>(Dictionary<string, T> table, Func<T, bool> isExpired)
+        {
+            List<string> expired = null;
+            foreach (KeyValuePair<string, T> entry in table)
+            {
+                if (!isExpired(entry.Value)) continue;
+                if (expired == null) expired = new List<string>();
+                expired.Add(entry.Key);
+            }
+            if (expired == null) return;
+            foreach (string key in expired) table.Remove(key);
+        }
+
+        private static bool TryAddAccount_NoLock(string key, AccountRecord record, out string error)
+        {
+            error = null;
+            Accounts.Add(key, record);
+            try
+            {
+                Save_NoLock();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Accounts.Remove(key);
+                BNL.LogError("[AccountServ] Failed to save the account database: " + exception.Message);
+                error = "The account database could not be saved. Contact the server administrator.";
+                return false;
+            }
         }
 
         private static void Save_NoLock()
@@ -554,8 +605,10 @@ namespace BasisAccountServ
             string json = JsonSerializer.Serialize(database, new JsonSerializerOptions { WriteIndented = true });
             string temporaryPath = _databasePath + ".tmp";
             File.WriteAllText(temporaryPath, json);
-            if (File.Exists(_databasePath)) File.Delete(_databasePath);
-            File.Move(temporaryPath, _databasePath);
+            if (File.Exists(_databasePath))
+                File.Replace(temporaryPath, _databasePath, null);
+            else
+                File.Move(temporaryPath, _databasePath);
         }
 
         private static void EnsureInitialized()
@@ -605,6 +658,7 @@ namespace BasisAccountServ
         private sealed class FailureRecord
         {
             public int Count { get; set; }
+            public DateTime LastFailureUtc { get; set; }
             public DateTime LockedUntilUtc { get; set; }
         }
 
