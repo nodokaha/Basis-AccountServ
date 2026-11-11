@@ -109,7 +109,7 @@ You can also use Unity Package Manager's **Add package from Git URL** and enter:
 https://github.com/nodokaha/Basis-AccountServ.git
 ```
 
-The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore. The private plugin-message handler is registered by the client startup callback before scene loading. The main-menu `Account` provider is registered independently with `RuntimeInitializeOnLoadMethod(AfterSceneLoad)`, matching Basis' built-in menu-provider lifecycle. This separation means menu registration does not depend on the private message registry being ready. It is not part of the server module installed by basispm.
+The Unity integration is provided as the separate `BasisAccountServ.Unity` assembly. It references Basis Framework and BasisNetworkCore. The private plugin-message handler and main-menu `Account` provider are initialized from the same client startup callback before scene loading. The provider is registered directly from that callback, so it does not rely on Unity discovering a separate runtime initialization method on the provider class. It is not part of the server module installed by basispm.
 
 ### 4. Open the panel
 
@@ -117,7 +117,7 @@ Start the server with AccountServ enabled, launch the Unity client with the pack
 
 If **Account** does not appear, use the Unity Console to distinguish registration from button creation:
 
-- No `[AccountServ] Main-menu provider ...` message: confirm that `BasisAccountServ.Unity` compiled, the package is imported, and the `AfterSceneLoad` callback is being discovered.
+- No `[AccountServ] Initializing Unity client integration.` message: confirm that `BasisAccountServ.Unity` compiled and the package is imported. If that initialization message appears but no `Main-menu provider` message follows, inspect exceptions during client startup.
 - `[AccountServ] Main-menu provider registered. The hotbar button will be created when BasisMainMenu is initialized.`: the provider is registered before the menu instance exists; Basis creates the button when it constructs the main menu.
 - `[AccountServ] Main-menu provider registered and hotbar button bound.`: Basis has registered the provider and created its button. If it is still not visible, inspect the active menu UI and layout.
 - `[AccountServ] Provider is registered, but its hotbar button was not created.`: the provider list contains AccountServ, but Basis could not create the button. Check `BasisMainMenu.ProviderButtonParent`, `PanelButton.CreateNew`, and Unity Console errors.
