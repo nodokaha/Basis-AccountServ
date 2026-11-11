@@ -39,9 +39,10 @@ namespace BasisAccountServ
         }
 
         /// <summary>
-        /// Called by AccountServClient.Initialize so menu registration shares the
-        /// same guaranteed package startup path as the client message handler.
+        /// Register independently of AccountServClient initialization.
+        /// This follows the same Unity startup hook used by Basis' built-in menu providers.
         /// </summary>
+        [RuntimeInitializeOnLoadMethod]
         internal static void Register()
         {
             if (instance == null)
