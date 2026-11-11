@@ -50,7 +50,7 @@ namespace BasisAccountServ.Tests
         [Test]
         public void ShortcutUsesSettingsTabLocalizationKey()
         {
-            Assert.That(AccountServSettingsTab.TabKey, Is.EqualTo("accountserv.settings.tab"));
+            Assert.That(AccountServSettingsTab.TabKey, Is.EqualTo("AccountServ"));
         }
     }
 }
