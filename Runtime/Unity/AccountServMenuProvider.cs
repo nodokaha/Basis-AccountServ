@@ -246,6 +246,7 @@ namespace BasisAccountServ
             roleDropdown = PanelDropdown.CreateNewEntry(group.ContentParent);
             roleDropdown.Descriptor.SetTitle("Role");
             roleDropdown.AssignEntries(new List<string> { "admin", "moderator", "none" });
+            roleDropdown.SetValueWithoutNotify("moderator");
 
             PanelButton apply = PanelButton.CreateNew(PanelButton.ButtonStyles.StandardButton, group.ContentParent);
             apply.Descriptor.SetTitle("Apply role");
