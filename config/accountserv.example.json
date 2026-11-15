@@ -5,6 +5,7 @@
     "minimumPasswordLength": 12,
     "maximumFailedLogins": 5,
     "lockoutSeconds": 300,
-    "sessionLifetimeMinutes": 1440
+    "sessionLifetimeMinutes": 1440,
+    "maximumAccountsPerIdentity": 1
   }
 }
