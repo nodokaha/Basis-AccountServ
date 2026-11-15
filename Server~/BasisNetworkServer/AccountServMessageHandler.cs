@@ -21,7 +21,6 @@ namespace BasisAccountServ
         public const byte ResponseMessage = 128;
         public const byte ResponseIdentifyChallenge = 129;
         private const int MaximumRequestBytes = 1024;
-
         private static bool _registered;
 
         public static void Register()
@@ -52,6 +51,12 @@ namespace BasisAccountServ
                     string.IsNullOrWhiteSpace(uuid))
                 {
                     Reply(peer, "AccountServ: authenticated Basis identity required.");
+                    return;
+                }
+
+                if (!AccountServRateLimiter.TryAcquire(uuid.Trim(), DateTime.UtcNow))
+                {
+                    Reply(peer, "AccountServ: too many requests. Please wait a moment.");
                     return;
                 }
 
