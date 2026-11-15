@@ -549,9 +549,10 @@ namespace BasisAccountServ
 
         private static byte[] DeriveHash(string password, byte[] salt)
         {
-            // Static Pbkdf2 produces byte-identical output to the Rfc2898DeriveBytes constructor
-            // (still used by the Unity client, whose runtime lacks the static method).
-            return Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, HashSize);
+            // The constructor form is required: BasisNetworkServer targets netstandard2.1,
+            // which does not provide the static Rfc2898DeriveBytes.Pbkdf2 method.
+            using (var derive = new Rfc2898DeriveBytes(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
+                return derive.GetBytes(HashSize);
         }
 
         private static void DeriveCredentialKeys(string password, byte[] salt, out byte[] storedKey, out byte[] clientKey)
