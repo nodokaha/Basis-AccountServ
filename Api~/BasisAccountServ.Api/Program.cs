@@ -77,21 +77,23 @@ app.MapPost("/api/did/link/challenges", async (
 
     await using (var cleanup = new NpgsqlCommand("""
         DELETE FROM basis_did_link_challenges
-        WHERE expires_at <= NOW()
-           OR (consumed_at IS NOT NULL AND created_at < NOW() - INTERVAL '1 day')
+        WHERE created_at < NOW() - INTERVAL '1 day'
+           OR (expires_at <= NOW() AND created_at < NOW() - INTERVAL '5 minutes')
         """, connection, transaction))
     {
         await cleanup.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    await using (var active = new NpgsqlCommand("""
+    // Count every challenge issued recently, consumed or not. Counting only unconsumed ones let a
+    // caller mint unlimited challenges by completing each with a bad signature.
+    await using (var recent = new NpgsqlCommand("""
         SELECT COUNT(*) FROM basis_did_link_challenges
-        WHERE account_id = @account_id AND consumed_at IS NULL AND expires_at > NOW()
+        WHERE account_id = @account_id AND created_at > NOW() - INTERVAL '5 minutes'
         """, connection, transaction))
     {
-        active.Parameters.AddWithValue("account_id", accountId);
-        var activeCount = (long)(await active.ExecuteScalarAsync(cancellationToken) ?? 0L);
-        if (activeCount >= 5)
+        recent.Parameters.AddWithValue("account_id", accountId);
+        var recentCount = (long)(await recent.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        if (recentCount >= 10)
             return Results.StatusCode(StatusCodes.Status429TooManyRequests);
     }
 
@@ -205,18 +207,7 @@ app.MapPost("/api/did/link/challenges/{challengeId:guid}/complete", async (
     return Results.Ok(new { linked = true, did });
 });
 
-var migrationPath = Path.Combine(AppContext.BaseDirectory, "Migrations", "001_initial_schema.sql");
-if (!File.Exists(migrationPath))
-    throw new FileNotFoundException("The initial database migration was not published.", migrationPath);
-
-var migrationSql = await File.ReadAllTextAsync(migrationPath);
-await using (var connection = await dataSource.OpenConnectionAsync())
-await using (var transaction = await connection.BeginTransactionAsync())
-{
-    await using var command = new NpgsqlCommand(migrationSql, connection, transaction);
-    await command.ExecuteNonQueryAsync();
-    await transaction.CommitAsync();
-}
+await MigrationRunner.ApplyAsync(dataSource, Path.Combine(AppContext.BaseDirectory, "Migrations"));
 
 app.Lifetime.ApplicationStopped.Register(dataSource.Dispose);
 app.Run();

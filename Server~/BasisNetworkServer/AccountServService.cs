@@ -20,6 +20,13 @@ namespace BasisAccountServ
         private const int HashSize = 32;
         private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
         private const int Pbkdf2Iterations = 210000;
+
+        /// <summary>
+        /// Separator between the normalized account name and the nonce in the proof input.
+        /// This is the two characters backslash and 'n' (not a newline) and MUST match
+        /// AccountServClientProtocol.ProofSeparator, otherwise every Identify fails.
+        /// </summary>
+        internal const string ProofSeparator = "\\n";
         private static readonly object Gate = new object();
         private static readonly Dictionary<string, AccountRecord> Accounts =
             new Dictionary<string, AccountRecord>(StringComparer.OrdinalIgnoreCase);
@@ -35,6 +42,7 @@ namespace BasisAccountServ
         private static int _maximumFailedLogins = 5;
         private static int _lockoutSeconds = 300;
         private static int _sessionLifetimeMinutes = 1440;
+        private static int _maximumAccountsPerIdentity = 1;
         private static bool _initialized;
 
         public static void Initialize(
@@ -42,7 +50,8 @@ namespace BasisAccountServ
             int minimumPasswordLength = 12,
             int maximumFailedLogins = 5,
             int lockoutSeconds = 300,
-            int sessionLifetimeMinutes = 1440)
+            int sessionLifetimeMinutes = 1440,
+            int maximumAccountsPerIdentity = 1)
         {
             if (string.IsNullOrWhiteSpace(databasePath))
                 throw new ArgumentException("Database path is required.", nameof(databasePath));
@@ -54,6 +63,7 @@ namespace BasisAccountServ
                 _maximumFailedLogins = Math.Max(1, maximumFailedLogins);
                 _lockoutSeconds = Math.Max(1, lockoutSeconds);
                 _sessionLifetimeMinutes = Math.Max(1, sessionLifetimeMinutes);
+                _maximumAccountsPerIdentity = Math.Max(1, maximumAccountsPerIdentity);
 
                 Accounts.Clear();
                 Sessions.Clear();
@@ -86,7 +96,7 @@ namespace BasisAccountServ
         {
             error = null;
             if (!IsValidIdentity(authenticatedUuid)) { error = "A verified Basis identity is required."; return false; }
-            if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 characters (letters, digits, underscore, or hyphen)."; return false; }
+            if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 ASCII characters (letters, digits, underscore, or hyphen)."; return false; }
             if (password == null || password.Length < _minimumPasswordLength || password.Length > 256) { error = "Password length must be within the configured minimum and 256 characters."; return false; }
 
             lock (Gate)
@@ -94,6 +104,11 @@ namespace BasisAccountServ
                 EnsureInitialized();
                 string key = NormalizeName(accountName);
                 if (Accounts.ContainsKey(key)) { error = "Account name is already registered."; return false; }
+                if (CountAccountsOwnedBy_NoLock(authenticatedUuid.Trim()) >= _maximumAccountsPerIdentity)
+                {
+                    error = "This Basis identity has reached the maximum number of accounts.";
+                    return false;
+                }
 
                 byte[] salt = new byte[SaltSize];
                 using (RandomNumberGenerator random = RandomNumberGenerator.Create())
@@ -129,7 +144,7 @@ namespace BasisAccountServ
         {
             error = null;
             if (!IsValidIdentity(authenticatedUuid)) { error = "A verified Basis identity is required."; return false; }
-            if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 characters (letters, digits, underscore, or hyphen)."; return false; }
+            if (!IsValidAccountName(accountName)) { error = "Account name must be 3-24 ASCII characters (letters, digits, underscore, or hyphen)."; return false; }
             if (claimedPasswordLength < _minimumPasswordLength || claimedPasswordLength > 256)
             {
                 error = "Password length must be within the configured minimum and 256 characters.";
@@ -159,6 +174,11 @@ namespace BasisAccountServ
                 EnsureInitialized();
                 string key = NormalizeName(accountName);
                 if (Accounts.ContainsKey(key)) { error = "Account name is already registered."; return false; }
+                if (CountAccountsOwnedBy_NoLock(authenticatedUuid.Trim()) >= _maximumAccountsPerIdentity)
+                {
+                    error = "This Basis identity has reached the maximum number of accounts.";
+                    return false;
+                }
 
                 if (!TryAddAccount_NoLock(key, new AccountRecord
                 {
@@ -306,7 +326,7 @@ namespace BasisAccountServ
                     return false;
                 }
 
-                byte[] proofInput = Encoding.UTF8.GetBytes(challenge.AccountName + "\\n" + challenge.Nonce);
+                byte[] proofInput = Encoding.UTF8.GetBytes(challenge.AccountName + ProofSeparator + challenge.Nonce);
                 byte[] signature;
                 using (var hmac = new HMACSHA256(storedKey))
                     signature = hmac.ComputeHash(proofInput);
@@ -440,11 +460,13 @@ namespace BasisAccountServ
         public static bool SetOperatorRole(string actorUuid, string targetUuid, string role, out string error)
         {
             error = null;
-            if (!IsValidIdentity(actorUuid) || !IsValidIdentity(targetUuid))
+            if (!IsValidIdentity(actorUuid) || !IsValidTargetIdentity(targetUuid))
             {
                 error = "Verified actor and target identities are required.";
                 return false;
             }
+            actorUuid = actorUuid.Trim();
+            targetUuid = targetUuid.Trim();
 
             lock (Gate)
             {
@@ -456,6 +478,13 @@ namespace BasisAccountServ
                 }
 
                 string normalizedRole = (role ?? "").Trim().ToLowerInvariant();
+                if (string.Equals(actorUuid, targetUuid, StringComparison.OrdinalIgnoreCase) &&
+                    normalizedRole != "admin")
+                {
+                    error = "Administrators cannot remove their own admin role. Ask another administrator.";
+                    return false;
+                }
+
                 if (normalizedRole == "admin")
                     PermissionManager.PermissionIntegration.Manager.AddUserToGroup(targetUuid, "admin");
                 else if (normalizedRole == "moderator")
@@ -473,6 +502,7 @@ namespace BasisAccountServ
                     error = "Role must be admin, moderator, or none.";
                     return false;
                 }
+                BNL.Log("[AccountServ] Audit: " + actorUuid + " set role of " + targetUuid + " to " + normalizedRole + ".");
                 return true;
             }
         }
@@ -519,6 +549,8 @@ namespace BasisAccountServ
 
         private static byte[] DeriveHash(string password, byte[] salt)
         {
+            // The constructor form is required: BasisNetworkServer targets netstandard2.1,
+            // which does not provide the static Rfc2898DeriveBytes.Pbkdf2 method.
             using (var derive = new Rfc2898DeriveBytes(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
                 return derive.GetBytes(HashSize);
         }
@@ -604,7 +636,12 @@ namespace BasisAccountServ
             var database = new AccountDatabase { Accounts = Accounts.Values.ToList() };
             string json = JsonSerializer.Serialize(database, new JsonSerializerOptions { WriteIndented = true });
             string temporaryPath = _databasePath + ".tmp";
-            File.WriteAllText(temporaryPath, json);
+            using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                byte[] bytes = new UTF8Encoding(false).GetBytes(json);
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true); // fsync so a crash cannot leave a truncated database
+            }
             if (File.Exists(_databasePath))
                 File.Replace(temporaryPath, _databasePath, null);
             else
@@ -618,6 +655,33 @@ namespace BasisAccountServ
 
         private static bool IsValidIdentity(string uuid) => !string.IsNullOrWhiteSpace(uuid) && uuid.Trim().Length <= 128;
 
+        /// <summary>
+        /// Role targets are typed in by an operator, so reject anything that cannot be a Basis
+        /// DID/UUID string instead of creating junk permission-group entries.
+        /// </summary>
+        private static bool IsValidTargetIdentity(string uuid)
+        {
+            if (!IsValidIdentity(uuid)) return false;
+            foreach (char c in uuid.Trim())
+            {
+                bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                               (c >= '0' && c <= '9') || c == ':' || c == '_' || c == '-' || c == '.';
+                if (!allowed) return false;
+            }
+            return true;
+        }
+
+        private static int CountAccountsOwnedBy_NoLock(string uuid)
+        {
+            int count = 0;
+            foreach (AccountRecord account in Accounts.Values)
+            {
+                if (string.Equals(account.OwnerUuid, uuid, StringComparison.OrdinalIgnoreCase))
+                    count++;
+            }
+            return count;
+        }
+
         private static bool IsValidAccountName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return false;
@@ -625,7 +689,9 @@ namespace BasisAccountServ
             if (name.Length < 3 || name.Length > 24) return false;
             foreach (char c in name)
             {
-                if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-')) return false;
+                // ASCII only: Unicode letters allow look-alike (homoglyph) account names.
+                bool ascii = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+                if (!(ascii || c == '_' || c == '-')) return false;
             }
             return true;
         }

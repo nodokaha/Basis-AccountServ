@@ -22,6 +22,10 @@ namespace BasisAccountServ
         public const int SaltSize = 16;
         public const int VerifierSize = 32;
         public const int MinimumPasswordLength = 12;
+
+        // Two characters: backslash and 'n' (not a newline). Must stay identical to
+        // AccountServService.ProofSeparator on the server or every Identify fails.
+        public const string ProofSeparator = "\\n";
     }
 
     /// <summary>
@@ -240,7 +244,7 @@ namespace BasisAccountServ
 
                 DeriveCredentialKeys(password, salt, out byte[] storedKey, out byte[] clientKey);
                 string normalizedAccount = accountName.Trim().ToLowerInvariant();
-                byte[] proofInput = Encoding.UTF8.GetBytes(normalizedAccount + "\\n" + nonceBase64);
+                byte[] proofInput = Encoding.UTF8.GetBytes(normalizedAccount + AccountServClientProtocol.ProofSeparator + nonceBase64);
                 byte[] signature;
                 using (var hmac = new HMACSHA256(storedKey))
                     signature = hmac.ComputeHash(proofInput);

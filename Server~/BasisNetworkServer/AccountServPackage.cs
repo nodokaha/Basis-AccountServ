@@ -62,8 +62,12 @@ namespace BasisAccountServ
                     int sessionLifetimeMinutes = ReadInt(root, "security", "sessionLifetimeMinutes",
                         1440, "ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES");
 
+                    int maximumAccountsPerIdentity = ReadInt(root, "security", "maximumAccountsPerIdentity",
+                        1, "ACCOUNTSERV_SECURITY_MAXIMUM_ACCOUNTS_PER_IDENTITY");
+
                     AccountServService.Initialize(database, minimumPasswordLength,
-                        maximumFailedLogins, lockoutSeconds, sessionLifetimeMinutes);
+                        maximumFailedLogins, lockoutSeconds, sessionLifetimeMinutes,
+                        maximumAccountsPerIdentity);
                     AccountServMessageHandler.Register();
                     BNL.Log("[AccountServ] Account service and private DM endpoint initialized. Database: " + database);
                 }
@@ -75,7 +79,7 @@ namespace BasisAccountServ
             }
             catch (Exception exception)
             {
-                BNL.Log("[AccountServ] Failed to initialize: " + exception.Message);
+                BNL.LogError("[AccountServ] FAILED TO INITIALIZE; AccountServ is OFF for this run: " + exception.Message);
             }
         }
 

@@ -51,8 +51,13 @@ client authentication are complete.
   storage boundaries for the upcoming OIDC implementation. Raw authorization
   codes and refresh tokens are not stored.
 
-The initial schema is applied idempotently at API startup. Back up the
-accountserv-postgres volume before upgrades and production migration work.
+Migrations in `Migrations/*.sql` are applied at API startup in file-name order, each
+exactly once, and recorded in the `schema_migrations` table. A PostgreSQL advisory
+lock serializes replicas that start at the same moment. Add schema changes as new
+numbered files (`002_...sql`); never edit an applied file. `001` is idempotent, so a
+database created before `schema_migrations` existed simply has it recorded on the
+next start. Back up the accountserv-postgres volume before upgrades and production
+migration work.
 
 ## Health endpoints
 
@@ -135,7 +140,8 @@ connection context.
 
 1. `POST /api/did/link/challenges` with JSON `{"did":"did:key:z..."}`.
    The response contains `challengeId`, `did`, a Base64URL `payload`, and
-   `expiresAt`. Challenges expire after five minutes.
+   `expiresAt`. Challenges expire after five minutes. An account may be issued at most 10
+   challenges per five minutes, whether or not earlier ones were completed.
 2. Decode `payload` from Base64URL and sign those exact bytes with the
    matching Basis Ed25519 private key. Submit
    `POST /api/did/link/challenges/{challengeId}/complete` with JSON

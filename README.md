@@ -56,7 +56,8 @@ Example:
     "minimumPasswordLength": 12,
     "maximumFailedLogins": 5,
     "lockoutSeconds": 300,
-    "sessionLifetimeMinutes": 1440
+    "sessionLifetimeMinutes": 1440,
+    "maximumAccountsPerIdentity": 1
   }
 }
 ```
@@ -76,6 +77,7 @@ The server module can also be configured entirely through environment variables.
 | `ACCOUNTSERV_SECURITY_MAXIMUM_FAILED_LOGINS` | `5` | Failed Identify attempts before lockout |
 | `ACCOUNTSERV_SECURITY_LOCKOUT_SECONDS` | `300` | Lockout duration |
 | `ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES` | `1440` | AccountServ session lifetime |
+| `ACCOUNTSERV_SECURITY_MAXIMUM_ACCOUNTS_PER_IDENTITY` | `1` | Accounts one Basis identity may register |
 
 For example, set these on the **Basis Server container/service** in Docker Compose or Coolify:
 
@@ -87,6 +89,7 @@ environment:
   ACCOUNTSERV_SECURITY_MAXIMUM_FAILED_LOGINS: "5"
   ACCOUNTSERV_SECURITY_LOCKOUT_SECONDS: "300"
   ACCOUNTSERV_SECURITY_SESSION_LIFETIME_MINUTES: "1440"
+  ACCOUNTSERV_SECURITY_MAXIMUM_ACCOUNTS_PER_IDENTITY: "1"
 ```
 
 You can omit the JSON file when all required values are provided through environment variables. The database path should point to persistent storage; back it up with the rest of your server data. Do not commit live configuration or account database files to a public repository. Restart the Basis Server after changing environment variables or the JSON file; configuration is read at server startup.
@@ -138,6 +141,10 @@ The Operator action is accepted only when the requesting authenticated UUID is a
 - During Identify, the server issues a random 32-byte one-time challenge. The challenge expires after one minute.
 - The client returns a proof derived from the password. The server verifies that proof against the stored key.
 - Failed Identify attempts are counted per authenticated Basis UUID and can trigger the configured temporary lockout.
+- Account names are 3-24 **ASCII** characters (letters, digits, `_`, `-`). Non-ASCII letters are rejected so look-alike (homoglyph) names cannot impersonate other accounts. Accounts created earlier with other characters keep working.
+- One Basis identity may register at most `maximumAccountsPerIdentity` accounts (default 1).
+- Each authenticated identity is limited to 30 AccountServ requests per 60 seconds.
+- Role changes require the actor to be in Basis' `admin` group, the target must look like a Basis UUID/DID, an administrator cannot remove their own `admin` role (so the last administrator cannot lock themselves out by accident), and every successful change is written to the server log as an `Audit:` line.
 - Accounts created by the earlier PBKDF2-only package version are upgraded to the stored-key format on their first challenge-based Identify attempt.
 
 The private plugin channel provides message routing and peer scoping; it is **not** a claim that every Basis transport encrypts every packet. Use a trusted network or a secure transport when confidentiality of all traffic is required.
@@ -154,8 +161,9 @@ The client currently enforces a 12-character minimum locally. The server checks 
 | `security.maximumFailedLogins` | `5` | Failed Identify attempts before lockout |
 | `security.lockoutSeconds` | `300` | Lockout duration |
 | `security.sessionLifetimeMinutes` | `1440` | AccountServ session lifetime |
+| `security.maximumAccountsPerIdentity` | `1` | Accounts a single Basis identity (DID) may register |
 
-Accounts are stored in the configured database. Active sessions and pending authentication challenges are held in memory; sessions are cleared when the server restarts.
+Accounts are stored in the configured database. Despite the `.db` extension the file is a JSON document that is rewritten atomically (temporary file, flushed to disk, then replaced) on every change; keep it on persistent storage and back it up. Active sessions and pending authentication challenges are held in memory; sessions are cleared when the server restarts.
 
 ## Server-side API
 
@@ -190,6 +198,7 @@ Its checks are split as follows:
 
 - **Package metadata and configuration:** parses package/config JSON, checks required source and Unity metadata files exist, and checks expected strings in the Unity asmdef references. This is not a C# compilation.
 - **Unity client tests:** `Tests/Editor/AccountServSettingsTabTests.cs` contains EditMode tests for registration into `SettingsProvider.ExternalTabs` and duplicate prevention. Run these with Unity Test Runner in a compatible Basis Unity project; the current GitHub Actions workflow does not execute Unity Editor tests. The actual `PanelButton` prefab instantiation and in-client visibility still require a compatible Unity runtime check.
+- **Test AccountServ server logic:** `Server~/BasisNetworkServer.Tests` compiles `AccountServService.cs` and the rate limiter together with small stand-ins for Basis' logger and permission manager, and covers the challenge-response round trip, replay and lockout, the account policy, legacy credential upgrade, persistence across restarts and role management. Run it locally with `dotnet test Server~/BasisNetworkServer.Tests/BasisAccountServ.Server.Tests.csproj`.
 - **Compile AccountServ server module:** injects the server source into the official Basis `developer` checkout and runs `dotnet build` on `BasisNetworkServer`.
 - **Build central authentication API:** builds the ASP.NET Core API with .NET 10.
 - **Test Basis DID proof verification:** runs the central API's .NET unit tests.
